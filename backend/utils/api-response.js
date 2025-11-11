@@ -6,4 +6,4 @@ class ApiResponse {
     this.success = status < 400;
   }
 }
-return ApiResponse;
+export default ApiResponse;

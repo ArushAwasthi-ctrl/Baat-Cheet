@@ -1,5 +1,5 @@
 import { validationResult } from "express-validator";
-import ApiError from "../utils/api-error";
+import ApiError from "../utils/api-error.js";
 
 const validate = (req, res, next) => {
   const errors = validationResult(req);
@@ -15,3 +15,4 @@ const validate = (req, res, next) => {
   );
   throw new ApiError(422, "Data by user is not Validated", extractedErrors);
 };
+export default validate;

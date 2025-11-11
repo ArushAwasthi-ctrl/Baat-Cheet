@@ -11,6 +11,7 @@ const redisCall = async (redisUrl) => {
     });
     await redisClient.connect();
     console.log("Redis connected");
+    
   } catch (error) {
     console.error(`Error while connecting with Redis: ${error}`);
     process.exit(1); // stop server if Redis fails
