@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
-import jwt from 'jsonwebtoken'
-const userSchema = new  mongoose.Schema(
+import jwt from "jsonwebtoken";
+import bcrypt from "bcrypt";
+const userSchema = new mongoose.Schema(
   {
     username: {
       type: String,
@@ -72,7 +73,9 @@ userSchema.methods.createRefreshToken = function () {
     { expiresIn: process.env.REFRESH_TOKEN_EXPIRY },
   );
 };
-
+userSchema.methods.validatePassword = async function (password) {
+  return await bcrypt.compare(password, this.password);
+};
 
 const User = mongoose.model("User", userSchema);
 export default User;
