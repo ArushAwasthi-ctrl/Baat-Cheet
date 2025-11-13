@@ -1,20 +1,21 @@
-import { createClient } from "redis";
+import Redis from "ioredis";
+
 let redisClient;
+
 const redisCall = async (redisUrl) => {
   try {
-    redisClient = createClient({
-      url: redisUrl,
+    redisClient = new Redis(redisUrl, {
+      maxRetriesPerRequest: null,
+      enableReadyCheck: false,
+      tls: redisUrl.startsWith("rediss://") ? {} : undefined,
     });
 
-    redisClient.on("error", (err) => {
-      console.error("Redis Error:", err);
-    });
-    await redisClient.connect();
-    console.log("Redis connected");
-    
+    redisClient.on("connect", () => console.log("Redis connected"));
+    redisClient.on("error", (err) => console.error("Redis Error:", err));
+
   } catch (error) {
     console.error(`Error while connecting with Redis: ${error}`);
-    process.exit(1); // stop server if Redis fails
+    process.exit(1);
   }
 };
 

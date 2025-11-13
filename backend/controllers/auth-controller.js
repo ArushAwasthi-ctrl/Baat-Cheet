@@ -7,6 +7,7 @@ import ApiResponse from "../utils/api-response.js";
 import asyncHandler from "../utils/asyncHandler.js";
 import { redisClient } from "../redis/redisClient.js";
 import { sendEmail, OTPVerificationMailGenContent } from "../utils/mailgen.js";
+import emailQueue from "../queues/email.queue.js";
 
 // ===================== GLOBAL CONFIG =====================
 const isProd = process.env.NODE_ENV === "production";
@@ -29,9 +30,8 @@ const refreshCookieOptions = {
 
 // ===================== HELPER FUNCTIONS =====================
 
-// Generate a 6-digit numeric OTP
-const generateOTP = () =>
-  Math.floor(100000 + Math.random() * 900000).toString();
+// Generate a 6-digit numeric OTP (cryptographically strong)
+const generateOTP = () => crypto.randomInt(100000, 1000000).toString();
 
 // Hash refresh token (to store securely in Redis)
 const hashRefreshToken = (refreshToken) =>
@@ -54,18 +54,19 @@ const registerUser = asyncHandler(async (req, res) => {
   //  Generate OTP
   const otp = generateOTP();
 
-  // Temporarily store user data and OTP in Redis
+  // Temporarily store user data and OTP in Redis (5 minutes)
   await redisClient.set(
     `register:${email}`,
     JSON.stringify({ username, email, password, otp }),
-    { EX: 300 }, // Expires in 5 minutes
+    "EX",
+    300,
   );
 
   //  Set rate limit cooldown (1 minute)
-  await redisClient.set(ratelimitKey, "true", { EX: 60 });
+  await redisClient.set(ratelimitKey, "true", "EX", 60);
 
-  //  Send OTP email
-  await sendEmail({
+  //  Send OTP email by adding in Email Queue BullMQ
+  emailQueue.add("sendMail", {
     email,
     subject: "OTP Verification",
     mailGenContent: OTPVerificationMailGenContent(username, otp),
@@ -115,11 +116,14 @@ const verifyOtp = asyncHandler(async (req, res) => {
   const accessToken = newUser.createAccessToken();
   const refreshToken = newUser.createRefreshToken();
 
-  //  Hash and store refresh token in Redis
+  //  Hash and store refresh token in Redis (7 days)
   const hashedRefresh = hashRefreshToken(refreshToken);
-  await redisClient.set(`refresh:${newUser._id}`, hashedRefresh, {
-    EX: 7 * 24 * 60 * 60,
-  });
+  await redisClient.set(
+    `refresh:${newUser._id}`,
+    hashedRefresh,
+    "EX",
+    7 * 24 * 60 * 60,
+  );
 
   //  Cleanup temp Redis data
   await redisClient.del(`register:${email}`);
@@ -147,7 +151,7 @@ const verifyOtp = asyncHandler(async (req, res) => {
 });
 
 // ===================== LOGIN USER =====================
-const loginUser = asyncHandler(async (req, res) => {
+ const loginUser = asyncHandler(async (req, res) => {
   const { email, password } = req.body;
 
   //  Check user existence
@@ -165,11 +169,14 @@ const loginUser = asyncHandler(async (req, res) => {
   const accessToken = user.createAccessToken();
   const refreshToken = user.createRefreshToken();
 
-  //  Store hashed refresh token in Redis
+  //  Store hashed refresh token in Redis (7 days)
   const hashedRefresh = hashRefreshToken(refreshToken);
-  await redisClient.set(`refresh:${user._id}`, hashedRefresh, {
-    EX: 7 * 24 * 60 * 60,
-  });
+  await redisClient.set(
+    `refresh:${user._id}`,
+    hashedRefresh,
+    "EX",
+    7 * 24 * 60 * 60,
+  );
 
   //  Set cookies
   res.cookie("accessToken", accessToken, accessCookieOptions);
@@ -195,9 +202,9 @@ const loginUser = asyncHandler(async (req, res) => {
 // ===================== LOGOUT USER =====================
 const logoutUser = asyncHandler(async (req, res) => {
   const { id, email } = req.user;
-  
+
   // setting status of user to offline after logout
-  await User.findByIdAndUpdate(id, { status: "offline" });
+  await User.findByIdAndUpdate(id, { status: "offline", lastSeen: new Date() });
 
   //  Delete refresh token from Redis (invalidate session)
   await redisClient.del(`refresh:${id}`);
@@ -213,4 +220,45 @@ const logoutUser = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, null, `User ${email} logged out successfully.`));
 });
 
-export { registerUser, verifyOtp, loginUser, logoutUser };
+//---------------REFRESH THE ACCESS TOKEN AFTER 15MINS-----------------
+
+const refreshToken = asyncHandler(async (req, res) => {
+  // get the refresh token from the cookies
+  const refreshToken = req.cookies?.refreshToken;
+  if (!refreshToken) {
+    throw new ApiError(401, "No Refresh Token Found");
+  }
+  // verify the refresh token
+  const decoded = jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET);
+  const userId = decoded?._id;
+  if (!userId) throw new ApiError(401, "Invalid refresh token payload");
+
+  // now get the hashedRefreshToken from the redis
+  const storedHashedToken = await redisClient.get(`refresh:${userId}`);
+  if (!storedHashedToken)
+    throw new ApiError(403, "Session expired, please log in again");
+
+  // create the hashedRefreshToken
+  const hashedRefreshToken = hashRefreshToken(refreshToken);
+  if (storedHashedToken !== hashedRefreshToken) {
+    throw new ApiError(
+      403,
+      "Invalid refresh token, possible token reuse attack",
+    );
+  }
+
+  // now get the user using the userId
+
+  const user = await User.findById(userId).select("-password");
+  if (!user) throw new ApiError(404, "User not found");
+
+  // create the accessToken
+  const newAccessToken = user.createAccessToken();
+
+  res.cookie("accessToken", newAccessToken, accessCookieOptions);
+  return res
+    .status(200)
+    .json(new ApiResponse(200, null, "Access token refreshed successfully"));
+});
+
+export { registerUser, verifyOtp, loginUser, logoutUser, refreshToken };

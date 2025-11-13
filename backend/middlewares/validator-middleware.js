@@ -13,6 +13,6 @@ const validate = (req, res, next) => {
       [err.path]: err.msg,
     }),
   );
-  throw new ApiError(422, "Data by user is not Validated", extractedErrors);
+  throw new ApiError(422, "Data by user is not Validated", false, extractedErrors);
 };
 export default validate;

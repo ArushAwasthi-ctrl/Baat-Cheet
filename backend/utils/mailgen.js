@@ -17,28 +17,36 @@ const sendEmail = async (options) => {
     );
     const emailHTML = mailGenerator.generate(options.mailGenContent);
 
-    // Setup transporter
-    const port = Number(process.env.MAIL_TRAP_PORT) || 2525;
+    // Setup transporter (Gmail or other SMTP)
+    const port = Number(process.env.SMTP_PORT) || 587;
+    const isSecure = port === 465; // Gmail: 465 = SSL, 587 = STARTTLS
+
     const transporter = nodemailer.createTransport({
-      host: process.env.MAIL_TRAP_HOST,
+      host: process.env.SMTP_HOST,
       port,
-      secure: port === 465, // SSL true agar port 465 hai
+      secure: isSecure,
       auth: {
-        user: process.env.MAIL_TRAP_USERNAME,
-        pass: process.env.MAIL_TRAP_PASSWORD,
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASSWORD,
       },
     });
 
     // Send mail
     const info = await transporter.sendMail({
-      from: '"BaatCheet"<no-reply@BaatCheet.com>',
+      from:
+        process.env.SMTP_FROM || `"BaatCheet" <${process.env.SMTP_USER}>`,
       to: options.email,
       subject: options.subject,
       text: emailTextual,
       html: emailHTML,
     });
 
-    console.log("Email sent:", info.messageId);
+    console.log("Email sent:", {
+      messageId: info.messageId,
+      accepted: info.accepted,
+      rejected: info.rejected,
+      response: info.response,
+    });
     return info;
   } catch (error) {
     console.error("Email sending failed:", error);

@@ -76,6 +76,9 @@ userSchema.methods.createRefreshToken = function () {
 userSchema.methods.validatePassword = async function (password) {
   return await bcrypt.compare(password, this.password);
 };
+userSchema.methods.validateRefreshToken = function (refreshToken) {
+  return jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET);
+};
 
 const User = mongoose.model("User", userSchema);
 export default User;
