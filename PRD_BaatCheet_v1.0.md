@@ -126,7 +126,7 @@ File Upload → Cloudinary → MongoDB (URL reference)
 - Server will broadcast to receiver socket rooms → both clients update UI instantly.
 - Messages will be saved in MongoDB for persistence.
 
-> Status: **Planned** (not yet implemented in current codebase).
+> Status: **Planned** (not yet implemented in current codebase; currently only Users + Auth APIs are live).
 
 ### 3️⃣ File Upload Flow
 - Client uploads → Cloudinary → returns secure URL → message sent with that URL.
@@ -233,12 +233,13 @@ File Upload → Cloudinary → MongoDB (URL reference)
 ---
 
 ### 👤 Users (`/api/users`)
-| Method | Endpoint | Description | Auth |
-|---------|-----------|-------------|------|
-| GET | `/api/users` | Get all users or search by name/email | ✅ |
-| GET | `/api/users/:id` | Get user profile by ID | ✅ |
-| PUT | `/api/users/profile` | Update profile (name, bio, avatar) | ✅ |
-| PUT | `/api/users/status` | Update presence/status | ✅ |
+|| Method | Endpoint | Description | Auth | Status |
+||---------|-----------|-------------|------|--------|
+|| GET | `/api/users/me` | Get current logged-in user profile | ✅ | ✅ Implemented |
+|| GET | `/api/users` | List/search users with cursor-based pagination (excludes self) | ✅ | ✅ Implemented |
+|| GET | `/api/users/:id` | Get user profile by ID | ✅ | Planned |
+|| PUT | `/api/users/profile` | Update own profile (username, bio, avatar) | ✅ | Planned |
+|| PUT | `/api/users/status` | Update presence/status | ✅ | Planned |
 
 ---
 

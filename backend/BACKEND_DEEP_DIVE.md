@@ -23,20 +23,23 @@ Key npm packages in use: express, mongoose, jsonwebtoken, redis, nodemailer, mai
 
 ## 2) Folder Structure (Current)
 
-- app.js — Express app and middlewares
-- index.js — Bootstrap: loads env, connects DB/Redis, starts server
+- app.js — Express app and middlewares (CORS, helmet, cookies, routes)
+- index.js — Bootstrap: loads env, connects DB/Redis, starts HTTP server
 - controllers/
-  - auth-controller.js — Register + OTP verification flow
+  - auth-controller.js — Auth flows (register, OTP verification, resend OTP, login, logout, refresh, forgot-password)
+  - users-controller.js — Users module (get current user, list/search users with pagination)
 - db/
   - dbCall.js — Mongoose connection helper
 - middlewares/
   - validator-middleware.js — Centralizes express-validator error handling
+  - auth-middleware.js — Validates access token from cookies and attaches req.user
 - models/
-  - Users.js — User schema + JWT methods
+  - Users.js — User schema + JWT methods (access/refresh), password validation
 - redis/
   - redisClient.js — Redis client init and export
 - routes/
   - auth-routes.js — /api/auth endpoints and validators
+  - users-routes.js — /api/users endpoints (me + search/list)
 - utils/
   - mailgen.js — Mail transporter + Mailgen content
   - api-error.js — Custom error class
@@ -44,6 +47,10 @@ Key npm packages in use: express, mongoose, jsonwebtoken, redis, nodemailer, mai
   - asyncHandler.js — Async error wrapper for Express
 - validators/
   - validate.js — Request body validators for auth flows
+- workers/
+  - email.worker.js — BullMQ worker for sending emails
+- queues/
+  - email.queue.js — BullMQ queue definition
 - package.json — Scripts and deps
 
 ---
@@ -90,21 +97,26 @@ Optional/recommended later:
 Fields (selected):
 - username: unique, trimmed, 3–30 chars
 - email: unique, lowercased, trimmed
-- password: required
-- avatar: optional URL
-- bio: max 150
+- password: required (hashed using bcrypt at registration/OTP verification time)
+- avatar: optional URL (default avatar provided)
+- bio: max 150, default ""
 - isVerified: boolean
 - lastSeen: Date
 - status: enum("online", "offline")
-- friends: [ObjectId ref User]
+- friends: [ObjectId ref User] (reserved for future friend/contacts system)
+
+Indexes:
+- Compound index on { username: 1, email: 1 } to speed up user search.
 
 Instance methods:
 - createAccessToken(): signs {_id, email} with ACCESS_TOKEN_SECRET and ACCESS_TOKEN_EXPIRY
 - createRefreshToken(): signs {_id} with REFRESH_TOKEN_SECRET and REFRESH_TOKEN_EXPIRY
+- validatePassword(password): bcrypt.compare on stored hash
+- validateRefreshToken(token): safely verifies refresh token; returns decoded payload or null
 
 Notes:
 - Unique constraints are defined at the schema level; ensure proper indexes in MongoDB.
-- No password hashing here (hashing is done during OTP verification).
+- Password hashing is handled in the auth flow (verify-otp / forgot-password controllers) before saving.
 
 ---
 
@@ -156,7 +168,7 @@ Operational flow:
 
 ## 9) Controllers and Routes
 
-Routes: routes/auth-routes.js (mounted at /api/auth)
+### 9.1 Auth Routes (routes/auth-routes.js mounted at /api/auth)
 
 1) POST /api/auth/register
    - Validators: userRegisterValidator()
@@ -221,9 +233,36 @@ Routes: routes/auth-routes.js (mounted at /api/auth)
      - Respond 200 with a success message (no login or tokens issued here)
 
 Planned (per PRD) but not yet built:
-- Refresh route
-- Users/Chats/Groups/Messages/Media routes
+- Chat/Group/Message/Media routes
 - Socket.IO real-time layer
+
+### 9.2 Users Routes (routes/users-routes.js mounted at /api/users)
+
+1) GET /api/users/me
+   - Middleware: auth-middleware (checks accessToken cookie and loads req.user)
+   - Logic (controllers/users-controller.js > getCurrentUser):
+     - Read req.user from auth-middleware
+     - Fetch fresh user data from MongoDB by _id
+     - Select only safe fields: username, email, avatar, bio, isVerified, lastSeen, status, createdAt
+     - Return 200 with user document wrapped in ApiResponse
+
+2) GET /api/users
+   - Middleware: auth-middleware
+   - Query params:
+     - search (optional): partial match on username/email (case-insensitive)
+     - cursor (optional): last user _id from previous page
+     - limit (optional): page size (default 20, max 50)
+   - Logic (controllers/users-controller.js > getAllUsers):
+     - Exclude current user: {_id: {$ne: req.user._id}}
+     - If search present, add $or on username/email with regex (i)
+     - If cursor present, ensure it is a valid ObjectId; then add filter {_id: {$gt: cursor}}
+     - Build filter: {$and: [ ...clauses ]}
+     - Query User with .find(filter).sort({_id: 1}).select("username avatar bio isVerified lastSeen status createdAt").limit(limit)
+     - Compute hasMore = users.length === limit
+     - nextCursor = hasMore ? last users _id : null
+     - Return 200 with { users, nextCursor, hasMore } in ApiResponse
+
+> These endpoints power the "current user" header and the "Find friends / Add friends" search with infinite scroll on the frontend.
 
 ---
 
@@ -393,7 +432,7 @@ Use this section as ready-made sentences you can almost copy-paste into intervie
 ## 19) Appendix: File-by-File Notes
 
 - app.js
-  - Parses bodies and cookies; env-driven CORS; helmet; compression; morgan; mounts /api/auth
+  - Parses bodies and cookies; env-driven CORS; helmet; compression; morgan; mounts /api/auth and /api/users
   - Error middleware placed after routes; 404 handler present
 - index.js
   - Loads env, connects Mongo/Redis, creates HTTP server and listens
@@ -403,7 +442,9 @@ Use this section as ready-made sentences you can almost copy-paste into intervie
   - verifyOtp: creates user, issues JWTs, sets cookies, stores hashed refresh in Redis
   - loginUser/logoutUser: implemented; cookies only (no tokens in body)
 - models/Users.js
-  - JWT helpers on schema; password validation via bcrypt.compare
+  - User schema with username/email/password/avatar/bio/status/lastSeen/friends
+  - Compound index on username/email for fast search
+  - JWT helpers on schema; password validation via bcrypt.compare; safe refresh-token verification method
 - redis/redisClient.js
   - node-redis client with connect() and error handler; exports redisClient and init function
 - utils/
