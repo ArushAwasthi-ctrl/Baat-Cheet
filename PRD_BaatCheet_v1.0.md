@@ -96,34 +96,45 @@ File Upload → Cloudinary → MongoDB (URL reference)
 
 ## 🧠 5. Tech Stack
 
-| Layer | Technology | Purpose |
-|-------|-------------|----------|
-| Frontend | React + Vite + Tailwind CSS + Redux | UI + state management |
-| Backend | Node.js + Express | REST APIs + socket server |
-| Database | MongoDB + Mongoose | Store users, chats, messages |
-| Cache | Redis | Session, presence, message cache |
-| Real-time | Socket.IO | Bidirectional real-time events |
-| Media | Cloudinary | File and image storage |
-| Deployment | Vercel (frontend), Render/Railway (backend), MongoDB Atlas (DB), Upstash/Render (Redis) | Cloud infrastructure |
+|| Layer | Technology | Purpose |
+||-------|-------------|----------|
+|| Frontend | React + Vite + Tailwind CSS + TanStack React Query + Framer Motion | UI, async state, and animations |
+|| Backend | Node.js + Express | REST APIs (auth now implemented) |
+|| Database | MongoDB + Mongoose | Store users, chats, messages (users implemented) |
+|| Cache / KV | Redis (Upstash/Render) | OTPs, refresh tokens, rate limits, presence (planned) |
+|| Real-time | Socket.IO (planned) | Bidirectional real-time events (chat, presence) |
+|| Queues | BullMQ | Offload email sending to worker processes |
+|| Email | Nodemailer + Mailgen | HTML emails for OTP and password reset |
+|| Media | Cloudinary (planned) | File and image storage |
+|| Deployment | Vercel (frontend), Render/Railway (backend), MongoDB Atlas (DB), Upstash/Render (Redis) | Cloud infrastructure |
 
 ---
 
 ## 🔄 6. User Flow Summary
 
-### 1️⃣ Authentication Flow
-- User signs up → password hashed (bcrypt) → JWT issued → token stored (HTTP-only cookie).
+### 1️⃣ Authentication Flow (implemented)
+- User registers → OTP sent via email (BullMQ + Mailgen) → OTP verified → password hashed (bcrypt) → JWT access + refresh tokens issued.
+- Tokens are stored in **httpOnly cookies** (no tokens in JSON body).
+- Refresh tokens are **hashed** and stored in Redis, keyed by `refresh:<userId>`.
+- Refresh endpoint issues a new access token using the refresh token from cookies.
+
+> Status: **Implemented in backend** (`/api/auth/register`, `/verify-otp`, `/login`, `/logout`, `/refresh`, `/forgotpassword`, `/verify-forgotpassword-otp`, `/resend-verify-otp`).
 
 ### 2️⃣ Chat Flow
-- User connects via Socket.IO with JWT validation.  
-- Messages emitted to the server (`send_message`).  
-- Server broadcasts to receiver socket rooms → both clients update UI instantly.  
-- Message saved in MongoDB for persistence.
+- Planned: User connects via Socket.IO with JWT validation.
+- Messages will be emitted to the server (`send_message`).
+- Server will broadcast to receiver socket rooms → both clients update UI instantly.
+- Messages will be saved in MongoDB for persistence.
+
+> Status: **Planned** (not yet implemented in current codebase).
 
 ### 3️⃣ File Upload Flow
 - Client uploads → Cloudinary → returns secure URL → message sent with that URL.
 
 ### 4️⃣ Group Management Flow
-- Create group → invite users → emit `group_created` → all members receive update.
+- Planned: Create group → invite users → emit `group_created` → all members receive update.
+
+> Status: **Planned** (no group routes/models yet).
 
 ---
 
@@ -156,28 +167,34 @@ File Upload → Cloudinary → MongoDB (URL reference)
 
 ## 🚀 9. Future Enhancements
 
+- 💬 **Chat + groups + real-time messaging** (Socket.IO + Mongo models for chats/messages)
 - 🤖 **AI Chat Assistant** (OpenAI API integration)
 - 🧠 **Chat Summaries & Sentiment Analysis**
 - 🌐 **WebRTC Video & Voice Calls**
-- 📩 **Email verification + Push notifications**
+- 📩 **Push notifications** (browser/mobile)
 - ☁️ **Microservice migration with Redis Pub/Sub**
 - 📱 **Mobile-friendly PWA version**
 
 ---
 
-## 🧩 10. Folder Structure (Backend Example)
+## 🧩 10. Folder Structure (Backend - current)
 
 ```
-/server
- ┣ 📁 config/           # DB, Redis, Cloudinary configs
- ┣ 📁 controllers/      # Business logic
- ┣ 📁 models/           # Mongoose schemas
- ┣ 📁 routes/           # Express routes
- ┣ 📁 sockets/          # Socket.IO event handlers
- ┣ 📁 middlewares/      # Auth, error, validation
- ┣ 📁 utils/            # Helpers
- ┣ 📄 server.js         # Entry point
- ┗ 📄 .env.example
+/backend
+ ┣ 📁 controllers/        # auth-controller.js (register, OTP, login, logout, refresh, forgot-password)
+ ┣ 📁 db/                 # dbCall.js (MongoDB connection)
+ ┣ 📁 middlewares/        # auth-middleware.js, validator-middleware.js
+ ┣ 📁 models/             # Users.js (user schema + JWT helpers)
+ ┣ 📁 queues/             # email.queue.js (BullMQ queue for emails)
+ ┣ 📁 redis/              # redisClient.js (Redis connection wrapper)
+ ┣ 📁 routes/             # auth-routes.js (auth-related routes)
+ ┣ 📁 utils/              # api-error, api-response, asyncHandler, mailgen
+ ┣ 📁 validators/         # validate.js (auth validators)
+ ┣ 📁 workers/            # email.worker.js (BullMQ worker for sending emails)
+ ┣ 📄 app.js              # Express app setup (CORS, helmet, cookies, routes)
+ ┣ 📄 index.js            # Server bootstrap (env, DB, Redis, HTTP server)
+ ┣ 📄 BACKEND_DEEP_DIVE.md# Deep backend notes + interview prep
+ ┗ 📄 package.json        # Backend scripts and dependencies
 ```
 
 ---
@@ -202,12 +219,16 @@ File Upload → Cloudinary → MongoDB (URL reference)
 ## 🔌 12. API Specification (Full Set)
 
 ### 🧍 Authentication (`/api/auth`)
-| Method | Endpoint | Description | Auth |
-|---------|-----------|-------------|------|
-| POST | `/api/auth/register` | Register a new user | ❌ |
-| POST | `/api/auth/login` | Login and get JWT token | ❌ |
-| POST | `/api/auth/logout` | Logout user (clear token) | ✅ |
-| GET | `/api/auth/refresh` | Refresh JWT token | ✅ |
+|| Method | Endpoint | Description | Auth | Status |
+||---------|-----------|-------------|------|--------|
+|| POST | `/api/auth/register` | Register a new user and send OTP via email | ❌ | ✅ Implemented |
+|| POST | `/api/auth/resend-verify-otp` | Resend verification OTP with Redis rate limiting | ❌ | ✅ Implemented |
+|| POST | `/api/auth/verify-otp` | Verify OTP and complete registration | ❌ | ✅ Implemented |
+|| POST | `/api/auth/login` | Login and set JWT tokens in httpOnly cookies | ❌ | ✅ Implemented |
+|| GET | `/api/auth/logout` | Logout user (clear cookies, delete refresh in Redis) | ✅ | ✅ Implemented |
+|| POST | `/api/auth/refresh` | Refresh access token using refresh token from cookies | ❌ | ✅ Implemented |
+|| POST | `/api/auth/forgotpassword` | Send OTP for password reset | ❌ | ✅ Implemented |
+|| POST | `/api/auth/verify-forgotpassword-otp` | Verify reset OTP and set new password | ❌ | ✅ Implemented |
 
 ---
 

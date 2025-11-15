@@ -17,6 +17,7 @@ import {
   refreshToken,
   forgotPassword,
   verifyForgotPasswordOtp,
+  resendEmailVerificationOTP,
 } from "../controllers/auth-controller.js";
 
 import authValidator from "../middlewares/auth-middleware.js";
@@ -29,7 +30,12 @@ Authrouter.route("/register").post(
   validate,
   registerUser,
 );
-
+// Resend Email Verification OTP
+Authrouter.route("/resend-verify-otp").post(
+  userRegisterValidator(),
+  validate,
+  resendEmailVerificationOTP,
+);
 //  Verify OTP route
 Authrouter.route("/verify-otp").post(verifyOtp);
 

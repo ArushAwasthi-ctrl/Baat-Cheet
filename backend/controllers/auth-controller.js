@@ -59,7 +59,7 @@ const registerUser = asyncHandler(async (req, res) => {
     `register:${email}`,
     JSON.stringify({ username, email, password, otp }),
     "EX",
-    3000
+    300,
   );
 
   //  Set rate limit cooldown (1 minute)
@@ -152,8 +152,44 @@ const verifyOtp = asyncHandler(async (req, res) => {
   );
 });
 
+//==================RESEND EMAIL VERIFICATION OTP================
+const resendEmailVerificationOTP = asyncHandler(async (req, res) => {
+  //  Apply rate limiting to prevent OTP spamming
+  const { email, username, password } = req.body;
+  const ratelimitKey = `register:ratelimit:${email}`;
+  if (await redisClient.get(ratelimitKey))
+    throw new ApiError(429, "Too many OTP requests. Please try again later.");
+
+  //  Generate OTP
+  const otp = generateOTP();
+
+  // Temporarily store user data and OTP in Redis (5 minutes)
+  await redisClient.set(
+    `register:${email}`,
+    JSON.stringify({ username, email, password, otp }),
+    "EX",
+    300,
+  );
+
+  //  Set rate limit cooldown (1 minute)
+  await redisClient.set(ratelimitKey, "true", "EX", 60);
+
+  //  Send OTP email by adding in Email Queue BullMQ
+  const intro =
+    "Welcome to BaatCheet! We're very excited to have you on board.";
+  emailQueue.add("sendMail", {
+    email,
+    subject: "OTP Verification",
+    mailGenContent: OTPVerificationMailGenContent(username, intro, otp),
+  });
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, null, "OTP sent to your email."));
+});
+
 // ===================== LOGIN USER =====================
-const loginUser = asyncHandler(async (req, res) => {
+ const loginUser = asyncHandler(async (req, res) => {
   const { email, password } = req.body;
 
   //  Check user existence
@@ -327,9 +363,11 @@ const verifyForgotPasswordOtp = asyncHandler(async (req, res) => {
 export {
   registerUser,
   verifyOtp,
+  resendEmailVerificationOTP,
   loginUser,
   logoutUser,
   refreshToken,
   forgotPassword,
   verifyForgotPasswordOtp,
+ 
 };

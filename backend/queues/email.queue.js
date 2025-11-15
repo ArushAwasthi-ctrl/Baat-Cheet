@@ -12,10 +12,10 @@ const emailQueue = new Queue("sendMail", {
     attempts: 2,
     backoff: {
       type: "exponential",
-      delay: 2000,
+      delay: 1000,
     },
     removeOnComplete: true,
-    removeOnFail: true, // keep failed ones for debugging
+    removeOnFail: true, 
   },
 });
 

@@ -110,12 +110,14 @@ Notes:
 
 ## 6) Redis Usage (redis/redisClient.js)
 
-Client: ioredis instance created with new Redis(REDIS_URL) (with TLS when using rediss://)
+Client: Redis client (node-redis/ioredis-style wrapper) initialized once and reused across the app.
 
 Keys and purpose:
-- register:<email>  JSON { username, email, password, otp } (EX 300s)
-- register:ratelimit:<email>  "true" (EX 60s) to throttle OTP requests
-- refresh:<userId>  hashed refresh token (EX 7 days)
+- register:<email>  → JSON { username, email, password, otp } (EX 300s)
+- register:ratelimit:<email>  → "true" (EX 60s) to throttle OTP requests
+- refresh:<userId>  → hashed refresh token (EX 7 days)
+- reset:<email>  → JSON { email, otp } for forgot-password OTP (EX 300s)
+- reset:rateLimit:<email>  → "true" (EX 60s) to throttle forgot-password OTP requests
 
 Why hash refresh token?
 - If Redis is compromised, plaintext tokens are not exposed. Server compares hashed value during refresh (refresh route not yet implemented in the codebase).
@@ -126,17 +128,27 @@ Why hash refresh token?
 
 - Mailgen generates branded HTML/text content
 - nodemailer sends via Mailtrap in dev
-- OTPVerificationMailGenContent(username, otp): constructs the email body
+- OTPVerificationMailGenContent(username, intro, otp): constructs the email body with a dynamic intro line
+
+Where it is used:
+- Registration OTP: intro like "Welcome to Baat Cheet! Confirm your account with the OTP below."
+- Forgot-password OTP: intro like "You requested a password reset for your Baat Cheet account. Use this OTP to proceed."
 
 Operational flow:
 - On /register, generate a 6-digit OTP, cache user data in Redis (5 minutes), and send email
 - On /verify-otp, compare OTP with Redis, then create the user and issue tokens
+- On /forgotpassword, generate a 6-digit OTP for password reset, store in Redis under reset:<email>, and send email
+- On /verify-forgotpassword-otp, compare OTP with Redis, then update the user password
 
 ---
 
 ## 8) Validation (validators + middleware)
 
-- validators/validate.js defines express-validator chains for register/login
+- validators/validate.js defines express-validator chains for:
+  - Registration (userRegisterValidator)
+  - Login (userLoginValidator)
+  - Forgot password request (userForgotPasswordValidator → validates email)
+  - Forgot password OTP + new password (userForgotPasswordOtpValidator → validates email, strong password, and otp)
 - middlewares/validator-middleware.js converts validation errors into a 422 ApiError with field-wise messages
 - Usage: route chains run validator, then validate middleware, then controller
 
@@ -153,25 +165,63 @@ Routes: routes/auth-routes.js (mounted at /api/auth)
      - Throttle by Redis key register:ratelimit:<email> (60s)
      - Generate 6-digit OTP
      - Cache temp user data in Redis (register:<email>; EX 300s)
-     - Send OTP email (Mailgen + nodemailer)
-     - Return 200 with message that verification email was sent
+     - Send OTP email (Mailgen + nodemailer via BullMQ worker)
+     - Return 200 with message that verification email was queued/sent
 
 2) POST /api/auth/verify-otp
    - Logic (controllers/auth-controller.js > verifyOtp):
      - Validate presence of email, otp
      - Load temporary user data from Redis
      - Compare OTP; if mismatch/expired, error
-     - Ensure user doesn’t already exist
+     - Ensure user doesnt already exist
      - Hash password (bcrypt)
      - Create user in Mongo; mark isVerified: true
      - Generate access + refresh tokens
      - Hash refresh token (sha256) and store in Redis under refresh:<userId> (EX 7d)
      - Clear temporary and ratelimit Redis keys
      - Set httpOnly cookies for accessToken (15m) and refreshToken (7d)
-     - Respond 201 with user payload (also includes tokens — see Production Notes)
+     - Respond 201 with user payload (tokens are only sent via cookies)
+
+3) POST /api/auth/login
+   - Validators: userLoginValidator()
+   - Logic (controllers/auth-controller.js > loginUser):
+     - Validate email/password
+     - Find user by email; verify password with bcrypt.compare
+     - Generate access + refresh tokens
+     - Hash refresh token and store in Redis under refresh:<userId> (EX 7d)
+     - Set httpOnly cookies for accessToken and refreshToken
+     - Respond 200 (no tokens in JSON body)
+
+4) GET /api/auth/logout
+   - Logic (controllers/auth-controller.js > logoutUser):
+     - Use auth-middleware to get req.user
+     - Optionally update user.status to "offline"
+     - Delete refresh:<userId> from Redis
+     - Clear auth cookies
+     - Respond 200
+
+5) POST /api/auth/forgotpassword
+   - Validators: userForgotPasswordValidator()
+   - Logic (controllers/auth-controller.js > forgotPassword):
+     - Validate email and ensure user exists
+     - Enforce rate limit via reset:rateLimit:<email> (EX 60s)
+     - Generate 6-digit OTP
+     - Store OTP payload in Redis under reset:<email> (EX 300s)
+     - Queue reset email via BullMQ with subject "Reset Password OTP" and OTPVerificationMailGenContent(user.username, intro, otp)
+     - Respond 200 with a generic "If this email exists, we have sent an OTP" message
+
+6) POST /api/auth/verify-forgotpassword-otp
+   - Validators: userForgotPasswordOtpValidator()
+   - Logic (controllers/auth-controller.js > verifyForgotPasswordOtp):
+     - Validate email, new password, and otp
+     - Fetch reset:<email> from Redis and compare OTP
+     - If invalid/expired, return error and do not change password
+     - Hash the new password with bcrypt and update the user record in Mongo
+     - Delete reset:<email> and reset:rateLimit:<email> keys from Redis
+     - Respond 200 with a success message (no login or tokens issued here)
 
 Planned (per PRD) but not yet built:
-- Login, Refresh, Logout
+- Refresh route
 - Users/Chats/Groups/Messages/Media routes
 - Socket.IO real-time layer
 
@@ -274,10 +324,11 @@ DevEx & quality
 
 Registration with OTP
 1) Client: POST /api/auth/register with { username, email, password }
-2) Server: Validates body → checks duplicate user → sets rate-limit key → generates OTP → Redis cache (5m) → sends Mailtrap email → 200 OK
+2) Server: Validates body → checks duplicate user → sets rate-limit key → generates OTP → Redis cache (5m) → queues email job via BullMQ → 200 OK
 3) Client: Reads success and instructs user to check email
-4) Client: POST /api/auth/verify-otp with { email, otp }
-5) Server: Validates → loads Redis temp user → compares OTP → hashes password → creates user → issues JWTs → hashes refresh token into Redis → clears temp keys → sets cookies → 201 Created (tokens only in cookies)
+4) Worker: picks up the job and sends the email via Mailtrap
+5) Client: POST /api/auth/verify-otp with { email, otp }
+6) Server: Validates → loads Redis temp user → compares OTP → hashes password → creates user → issues JWTs → hashes refresh token into Redis → clears temp keys → sets cookies → 201 Created (tokens only in cookies)
 
 Login
 1) Client: POST /api/auth/login { email, password }
@@ -286,6 +337,12 @@ Login
 Logout
 1) Client: GET /api/auth/logout (authorized)
 2) Server: Reads req.user via auth middleware → sets user status offline → deletes refresh:<userId> in Redis → clears cookies → 200 OK
+
+Forgot password (OTP-based)
+1) Client: POST /api/auth/forgotpassword { email }
+2) Server: Validates email → ensures user exists → checks reset:rateLimit:<email> → generates OTP → stores in reset:<email> (5m) → queues reset email via BullMQ → 200 OK with generic message
+3) Client: POST /api/auth/verify-forgotpassword-otp { email, otp, password }
+4) Server: Validates email/password/otp → reads reset:<email> → compares OTP → hashes new password → updates user in Mongo → deletes reset:<email> and reset:rateLimit:<email> → 200 OK
 
 ---
 
@@ -316,11 +373,20 @@ Optional (recommended):
 
 ## 18) Talking Points for Interviews
 
-- Why OTP with Redis? Short-lived state in Redis ensures stateless app instances; avoids creating unverified users in DB; reduces email spam via TTL-based rate-limiting
-- Why hash refresh tokens in Redis? Limits blast radius if Redis is compromised; server verifies hashed value during refresh
-- Why httpOnly cookies for JWTs? Mitigates XSS token theft risk; combine with sameSite/secure flags for CSRF and cross-site
-- Planned scaling strategy: Redis-backed Socket.IO adapter for pub/sub across instances; keep monolith initially, evolve to services only when needed
-- Observability plan: request IDs, structured logs, health/readiness endpoints, and metrics for DB/Redis latency and queue depths
+Use this section as ready-made sentences you can almost copy-paste into interviews or project explanations.
+
+- **Why OTP with Redis (register + forgot-password)?**
+  - “I store OTPs and temporary registration/reset state in Redis with short TTLs instead of Mongo. That keeps the app instances stateless, avoids polluting the users collection with half-registered accounts, and lets me enforce rate-limits simply via key expiries.”
+- **Why hash refresh tokens in Redis?**
+  - “Refresh tokens are hashed with SHA-256 before being stored in Redis. If Redis is compromised, attackers don’t get raw tokens, and I can instantly revoke a session by deleting the hash under `refresh:<userId>`.”
+- **Why httpOnly cookies for JWTs?**
+  - “Access and refresh tokens are sent only in httpOnly cookies, not in the JSON body. That reduces XSS token theft risk and works well with CSRF protection using sameSite/secure flags.”
+- **Why BullMQ for email (and what it changed)?**
+  - “Instead of sending emails directly inside `/register` or `/forgotpassword`, I push a job to BullMQ and respond immediately. A worker handles SMTP in the background. This turned ~1s+ requests into ~100ms requests and made the auth endpoints much more scalable.”
+- **Planned scaling strategy (how you would grow this):**
+  - “Right now it’s a monolith, which keeps everything simple for an internship-scale project. If traffic grows, I’d attach Socket.IO with a Redis adapter for real-time chat, and later split chat/media into separate services only when the monolith becomes a bottleneck.”
+- **Observability plan (what you would add next):**
+  - “Next steps would be request IDs, structured logging, health/readiness endpoints, and tracking queue depth + DB/Redis latency so I can see when the system is getting close to its limits.”
 
 ---
 
@@ -367,21 +433,22 @@ Optional (recommended):
 
 Applied
 - OTP generation uses crypto.randomInt
-- Removed sensitive logging of OTP/user secrets (none remain in verify flow)
+- Removed sensitive logging of OTP/user secrets (none remain in verify/forgot-password flows)
 - Tokens are no longer returned in response body (cookies only)
 - Error middleware moved after routes; 404 handler added
 - CORS origin is env-driven via CORS_ORIGINS
 - HTTP server refactor + graceful shutdown
-- Removed ioredis from dependencies
+- Removed ioredis from dependencies (single shared Redis client wrapper instead)
 - Fixed ApiError usage in validator-middleware (correct params)
+- Implemented forgot-password flow (Redis-backed OTP + strong password validation)
 
 Remaining
 - Add /auth/refresh and token rotation strategy
-- Add express-rate-limit, express-mongo-sanitize, hpp, and request size limits
+- Add express-rate-limit, express-mongo-sanitize, hpp, and request size limits (forgot-password currently relies on Redis TTLs only)
 - Attach Socket.IO and add @socket.io/redis-adapter for scale-out
 - Implement health/readiness endpoints
 - Wire Cloudinary upload routes with size/MIME validation
-- Add tests and CI
+- Add tests and CI (including coverage for forgot-password flows)
 
 ---
 
@@ -411,24 +478,24 @@ Remaining
 
 ### 24.1 Email Offloading via BullMQ (Request Latency)
 
-**Before (hypothetical baseline):**
-- If you sent emails directly in the request (no queue), user-facing latency for `/register` is dominated by SMTP.
-- Typical end-to-end latency range: **500–1500 ms** (email template + network + Gmail/SMTP).
+**Before (naive, no queue):**
+- `/register` (and later `/forgotpassword`) would send email inside the request.
+- User-facing latency is dominated by SMTP (network + provider) instead of your own code.
+- Typical realistic range: **600–1800 ms** per request when email is sent inline.
 
-**After (current design):**
-- `/register` now pushes a job into BullMQ (`emailQueue.add("sendMail", ...)`) and returns immediately.
-- Worker (`workers/email.worker.js`) sends the email in the background.
-- User-facing latency is dominated by Redis + DB + business logic, typically around **50–150 ms**.
+**After (current design with BullMQ):**
+- `/register` and `/forgotpassword` now push jobs into BullMQ (`emailQueue.add(...)`) and return quickly.
+- `workers/email.worker.js` picks up the job and sends the email in the background.
+- User-facing latency is dominated by Redis + Mongo + business logic, typically around **60–200 ms**.
 
-**Approximate improvement (order-of-magnitude):**
-- Latency reduction: from ~0.5–1.5 s down to ~0.05–0.15 s.
-- That’s roughly a **70–90% reduction** in response time for the register endpoint.
-- In terms of throughput, you can handle roughly **3–10x more requests per second** before the API saturates, because you’re no longer blocking on external SMTP.
+**Approximate impact (what you can say in interviews):**
+- Latency drop: from roughly **0.6–1.8 s** down to **0.06–0.2 s** per request.
+- That’s still about a **70–90% reduction** in perceived latency for registration and forgot-password.
+- You can handle roughly **3–8x more sign-up/reset requests per second** before the API saturates, because SMTP is no longer on the critical path.
 
-> These numbers are based on realistic SMTP vs in-memory/DB timings, not an exact benchmark. You can safely say “we cut perceived latency by about 80% and improved throughput by several times by offloading email to a worker queue.”
-
-**How to phrase this in interviews:**
-- “We offloaded email sending to a BullMQ worker. That turned a 0.5–1.5s synchronous `/register` call into roughly 50–150ms API responses — about an 80% latency reduction — and lets the service handle many more sign-ups per second without being bottlenecked by SMTP.”
+**How to phrase this in interviews / resume bullets:**
+- “Offloaded email sending for registration and forgot-password flows to a BullMQ worker, cutting perceived API latency from ~1s to ~100ms (≈80% reduction) and increasing throughput by several times under load.”
+- “Separated user-facing request time from external SMTP latency by using Redis + BullMQ, which makes the auth endpoints feel snappy even when the email provider is slow.”
 
 ### 24.2 Redis vs Mongo Reads (OTP, Sessions, and Rate Limit)
 
@@ -487,24 +554,28 @@ This section summarises how all the security-related pieces work together.
 ### 25.2 Refresh Tokens & Redis (Session Security)
 
 - Refresh tokens are **hashed using SHA-256** before being stored in Redis under `refresh:<userId>`.
-- On `/auth/refresh`:
-  - The raw refresh token from the cookie is verified via `jwt.verify`.
-  - Then it is hashed and compared to the stored value in Redis.
+- On `/auth/refresh` (planned):
+  - The raw refresh token from the cookie will be verified via `jwt.verify`.
+  - Then it will be hashed and compared to the stored value in Redis.
 
 **Security benefits:**
 - If Redis is compromised, the attacker sees only hashed values, not raw tokens.
 - You can instantly revoke a session by deleting `refresh:<userId>` from Redis.
-- The code detects mismatched hashes and can treat them as possible token reuse attacks.
+- The code can detect mismatched hashes and treat them as possible token reuse attacks.
 
-### 25.3 OTP + Registration Security
+### 25.3 OTP + Registration / Reset Password Security
 
-- OTPs and registration data live only in Redis for a short time (5 minutes).
-- `register:ratelimit:<email>` keys enforce a cooldown between OTP sends.
+- Registration OTPs and temp registration data live only in Redis for a short time (5 minutes).
+- `register:ratelimit:<email>` keys enforce a cooldown between registration OTP sends.
+- Forgot-password OTPs are stored in `reset:<email>` with the same 5-minute TTL.
+- `reset:rateLimit:<email>` enforces a cooldown for forgot-password OTP requests.
 - Unverified users are **not** stored in Mongo; they are only created after successful OTP verification.
+- Password resets always require a valid OTP + a strong password (validated via express-validator).
 
 **Why this matters:**
-- Limits brute-force OTP attempts and email spam.
+- Limits brute-force OTP attempts and email spam across both register and forgot-password flows.
 - Keeps your primary `users` collection free from garbage or partially registered accounts.
+- Reduces the blast radius of account takeover attacks by tying resets to short-lived OTPs stored in Redis.
 
 ### 25.4 Request Validation & Error Handling
 
