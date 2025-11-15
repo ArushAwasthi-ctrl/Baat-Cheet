@@ -59,17 +59,19 @@ const registerUser = asyncHandler(async (req, res) => {
     `register:${email}`,
     JSON.stringify({ username, email, password, otp }),
     "EX",
-    300,
+    3000
   );
 
   //  Set rate limit cooldown (1 minute)
   await redisClient.set(ratelimitKey, "true", "EX", 60);
 
   //  Send OTP email by adding in Email Queue BullMQ
+  const intro =
+    "Welcome to BaatCheet! We're very excited to have you on board.";
   emailQueue.add("sendMail", {
     email,
     subject: "OTP Verification",
-    mailGenContent: OTPVerificationMailGenContent(username, otp),
+    mailGenContent: OTPVerificationMailGenContent(username, intro, otp),
   });
 
   //  Success response
@@ -151,7 +153,7 @@ const verifyOtp = asyncHandler(async (req, res) => {
 });
 
 // ===================== LOGIN USER =====================
- const loginUser = asyncHandler(async (req, res) => {
+const loginUser = asyncHandler(async (req, res) => {
   const { email, password } = req.body;
 
   //  Check user existence
@@ -261,4 +263,73 @@ const refreshToken = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, null, "Access token refreshed successfully"));
 });
 
-export { registerUser, verifyOtp, loginUser, logoutUser, refreshToken };
+//----------------FORGOT PASSWORD--------------------------------
+const forgotPassword = asyncHandler(async (req, res) => {
+  const { email } = req.body;
+
+  const user = await User.findOne({ email });
+  if (!user) throw new ApiError(404, "User not found");
+
+  const ratelimitKey = `reset:rateLimit:${email}`;
+  if (await redisClient.get(ratelimitKey))
+    throw new ApiError(429, "Too many OTP requests. Try again later");
+
+  const otp = generateOTP();
+
+  await redisClient.set(`reset:${email}`, JSON.stringify({ otp }), "EX", 300);
+  await redisClient.set(ratelimitKey, "true", "EX", 60);
+
+  const intro = "Use this OTP to reset your BaatCheet account password";
+
+  emailQueue.add("sendResetPasswordMail", {
+    email,
+    subject: "Reset Password OTP",
+    mailGenContent: OTPVerificationMailGenContent(user.username, intro, otp),
+  });
+
+  return res.status(200).json(new ApiResponse(200, null, "OTP sent to email"));
+});
+
+//----------------VERIFY FORGOT PASSWORD OTP--------------------------
+const verifyForgotPasswordOtp = asyncHandler(async (req, res) => {
+  const { email, password, otp } = req.body;
+
+  if (!email || !password || !otp)
+    throw new ApiError(400, "Email, OTP and Password are required");
+
+  const redisData = await redisClient.get(`reset:${email}`);
+  if (!redisData) throw new ApiError(400, "OTP expired or invalid");
+
+  const { otp: savedOtp } = JSON.parse(redisData);
+
+  if (savedOtp !== otp) throw new ApiError(400, "Invalid OTP");
+
+  // Hash new password
+  const hashedPassword = await bcrypt.hash(password, 10);
+
+  // Update password in DB
+  await User.findOneAndUpdate(
+    { email },
+    {
+      password: hashedPassword,
+    },
+  );
+
+  // cleanup redis
+  await redisClient.del(`reset:${email}`);
+  await redisClient.del(`reset:rateLimit:${email}`);
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, null, "Password reset successfully"));
+});
+
+export {
+  registerUser,
+  verifyOtp,
+  loginUser,
+  logoutUser,
+  refreshToken,
+  forgotPassword,
+  verifyForgotPasswordOtp,
+};

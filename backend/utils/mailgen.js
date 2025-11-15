@@ -33,8 +33,7 @@ const sendEmail = async (options) => {
 
     // Send mail
     const info = await transporter.sendMail({
-      from:
-        process.env.SMTP_FROM || `"BaatCheet" <${process.env.SMTP_USER}>`,
+      from: process.env.SMTP_FROM || `"BaatCheet" <${process.env.SMTP_USER}>`,
       to: options.email,
       subject: options.subject,
       text: emailTextual,
@@ -55,11 +54,11 @@ const sendEmail = async (options) => {
 };
 
 // Email content generators
-const OTPVerificationMailGenContent = function (username, otp) {
+const OTPVerificationMailGenContent = function (username, intro , otp) {
   return {
     body: {
       name: `${username}`,
-      intro: "Welcome to BaatCheet! We're very excited to have you on board.",
+      intro: `${intro}`,
       action: {
         instructions: "Your One Time Password :",
         button: {
@@ -73,4 +72,5 @@ const OTPVerificationMailGenContent = function (username, otp) {
   };
 };
 
-export { OTPVerificationMailGenContent, sendEmail };
+
+export { OTPVerificationMailGenContent,sendEmail };
