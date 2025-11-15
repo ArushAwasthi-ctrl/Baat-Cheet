@@ -39,6 +39,10 @@ const hashRefreshToken = (refreshToken) =>
 
 // ===================== REGISTER USER =====================
 const registerUser = asyncHandler(async (req, res) => {
+  const user = req?.user;
+  if (user) {
+    throw new ApiError(401, "Cannot create user while being logged in");
+  }
   const { username, email, password } = req.body;
 
   //  Check if user already exists
@@ -188,8 +192,8 @@ const resendEmailVerificationOTP = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, null, "OTP sent to your email."));
 });
 
-// ===================== LOGIN USER =====================
- const loginUser = asyncHandler(async (req, res) => {
+// ===================== LOGIN USER ===============================
+const loginUser = asyncHandler(async (req, res) => {
   const { email, password } = req.body;
 
   //  Check user existence
@@ -369,5 +373,4 @@ export {
   refreshToken,
   forgotPassword,
   verifyForgotPasswordOtp,
- 
 };

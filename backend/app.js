@@ -5,6 +5,7 @@ import helmet from "helmet";
 import compression from "compression";
 import morgan from "morgan";
 import Authrouter from "./routes/auth-routes.js";
+import UserRouter from "./routes/users-routes.js";
 
 const app = express();
 
@@ -41,6 +42,7 @@ app.use(morgan(process.env.NODE_ENV === "production" ? "combined" : "dev"));
 
 // Routes
 app.use("/api/auth", Authrouter);
+app.use("/api/users", UserRouter);
 
 // 404 handler
 app.use((req, res, next) => {
