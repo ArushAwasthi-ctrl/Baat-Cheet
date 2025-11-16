@@ -11,14 +11,18 @@ const userSchema = new mongoose.Schema(
       trim: true,
       minlength: 3,
       maxlength: 30,
+      index: true, // makes search faster
     },
+
     email: {
       type: String,
       required: true,
       unique: true,
       lowercase: true,
       trim: true,
+      index: true,
     },
+
     password: {
       type: String,
       required: true,
@@ -27,8 +31,7 @@ const userSchema = new mongoose.Schema(
 
     avatar: {
       type: String,
-      default:
-        "https://www.freepik.com/free-vector/user-blue-gradient_145856969.htm#fromView=keyword&page=1&position=0&uuid=a41547ff-3562-4842-bbbe-55daf1aa5f92&query=User+avatar",
+      default: "https://avatar.iran.liara.run/public/boy",
     },
 
     bio: {
@@ -45,6 +48,7 @@ const userSchema = new mongoose.Schema(
     lastSeen: {
       type: Date,
       default: Date.now,
+      index: true,
     },
 
     status: {
@@ -63,13 +67,11 @@ const userSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
-// ------------------------------
-//  OPTIMIZED INDEXES
-// ------------------------------
 
-// // ------------------------------------------
-// //  PASSWORD HASHING MIDDLEWARE (BEST PRACTICE)
-// // ------------------------------------------
+
+// ------------------------------------------------
+// PASSWORD HASHING
+// ------------------------------------------------
 // userSchema.pre("save", async function (next) {
 //   if (!this.isModified("password")) return next();
 
@@ -80,36 +82,32 @@ const userSchema = new mongoose.Schema(
 // });
 
 // ------------------------------------------------
-//  INSTANCE METHODS: TOKEN CREATION & VALIDATION
+// INSTANCE METHODS
 // ------------------------------------------------
 userSchema.methods.createAccessToken = function () {
   return jwt.sign(
     { _id: this._id, email: this.email },
     process.env.ACCESS_TOKEN_SECRET,
-    {
-      expiresIn: process.env.ACCESS_TOKEN_EXPIRY,
-    },
+    { expiresIn: process.env.ACCESS_TOKEN_EXPIRY },
   );
 };
 
 userSchema.methods.createRefreshToken = function () {
-  return jwt.sign({ _id: this._id }, process.env.REFRESH_TOKEN_SECRET, {
-    expiresIn: process.env.REFRESH_TOKEN_EXPIRY,
-  });
+  return jwt.sign(
+    { _id: this._id },
+    process.env.REFRESH_TOKEN_SECRET,
+    { expiresIn: process.env.REFRESH_TOKEN_EXPIRY },
+  );
 };
 
-// Safely validate refresh token (no crashing)
 userSchema.methods.validateRefreshToken = function (token) {
   try {
     return jwt.verify(token, process.env.REFRESH_TOKEN_SECRET);
-  } catch (e) {
+  } catch {
     return null;
   }
 };
 
-// ------------------------------------------------
-//  PASSWORD VALIDATION
-// ------------------------------------------------
 userSchema.methods.validatePassword = async function (password) {
   return bcrypt.compare(password, this.password);
 };

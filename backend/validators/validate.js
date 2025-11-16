@@ -80,10 +80,33 @@ const userForgotPasswordOtpValidator = () => {
     body("otp").trim().notEmpty(),
   ];
 };
+const userUpdateProfileValidator = () => {
+  return [
+    body("username")
+      .optional()
+      .trim()
+      .isLength({ min: 3 })
+      .withMessage("Username must be at least 3 characters long")
+      .isLength({ max: 30 })
+      .withMessage("Username must be at most 30 characters long"),
 
+    body("bio")
+      .optional()
+      .trim()
+      .isLength({ max: 150 })
+      .withMessage("Bio must be at most 150 characters long"),
+
+    body("avatar")
+      .optional()
+      .trim()
+      .isURL()
+      .withMessage("Avatar must be a valid URL"),
+  ];
+};
 export {
   userRegisterValidator,
   userLoginValidator,
   userForgotPasswordValidator,
   userForgotPasswordOtpValidator,
+  userUpdateProfileValidator
 };
