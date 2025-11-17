@@ -39,7 +39,7 @@ Key npm packages in use: express, mongoose, jsonwebtoken, redis, nodemailer, mai
   - redisClient.js — Redis client init and export
 - routes/
   - auth-routes.js — /api/auth endpoints and validators
-  - users-routes.js — /api/users endpoints (me + search/list)
+  - users-routes.js — /api/users endpoints (me + search/list + profile)
 - utils/
   - mailgen.js — Mail transporter + Mailgen content
   - api-error.js — Custom error class
@@ -107,6 +107,7 @@ Fields (selected):
 
 Indexes:
 - Compound index on { username: 1, email: 1 } to speed up user search.
+- Individual indexes on username/email/lastSeen to support search and presence queries.
 
 Instance methods:
 - createAccessToken(): signs {_id, email} with ACCESS_TOKEN_SECRET and ACCESS_TOKEN_EXPIRY
@@ -161,6 +162,7 @@ Operational flow:
   - Login (userLoginValidator)
   - Forgot password request (userForgotPasswordValidator → validates email)
   - Forgot password OTP + new password (userForgotPasswordOtpValidator → validates email, strong password, and otp)
+  - Profile update (userUpdateProfileValidator → optional username/bio/avatar with length and URL checks)
 - middlewares/validator-middleware.js converts validation errors into a 422 ApiError with field-wise messages
 - Usage: route chains run validator, then validate middleware, then controller
 
@@ -249,20 +251,40 @@ Planned (per PRD) but not yet built:
 2) GET /api/users
    - Middleware: auth-middleware
    - Query params:
-     - search (optional): partial match on username/email (case-insensitive)
+     - search (optional): partial match on username/email (case-insensitive, sanitized via escapeRegex)
      - cursor (optional): last user _id from previous page
      - limit (optional): page size (default 20, max 50)
    - Logic (controllers/users-controller.js > getAllUsers):
      - Exclude current user: {_id: {$ne: req.user._id}}
-     - If search present, add $or on username/email with regex (i)
-     - If cursor present, ensure it is a valid ObjectId; then add filter {_id: {$gt: cursor}}
-     - Build filter: {$and: [ ...clauses ]}
-     - Query User with .find(filter).sort({_id: 1}).select("username avatar bio isVerified lastSeen status createdAt").limit(limit)
+     - If cursor present and valid ObjectId, add {_id: {$gt: cursor}} for cursor-based pagination
+     - If search present, add $or on username/email with anchored regex (^search, i) to leverage indexes
+     - Build a single filter object combining these conditions
+     - Query User with .find(filter).sort({_id: 1}).select(LIST_USER_PROJECTION).limit(limit).lean()
      - Compute hasMore = users.length === limit
      - nextCursor = hasMore ? last users _id : null
      - Return 200 with { users, nextCursor, hasMore } in ApiResponse
 
-> These endpoints power the "current user" header and the "Find friends / Add friends" search with infinite scroll on the frontend.
+3) GET /api/users/:id
+   - Middleware: auth-middleware
+   - Logic (controllers/users-controller.js > getIndividualUser):
+     - Read id from req.params
+     - Validate ObjectId format up front; if invalid, 400
+     - Find user by id, selecting "-password" and using .lean()
+     - If not found, 404
+     - Return 200 with the user document
+
+4) PUT /api/users/profile
+   - Middleware chain: auth-middleware → userUpdateProfileValidator() → validate → updateProfile
+   - Body (all optional, validated): username, bio, avatar (URL)
+   - Logic (controllers/users-controller.js > updateProfile):
+     - Take userId from req.user._id
+     - Build an update object only with provided fields
+     - If nothing provided, 400 (no fields to update)
+     - Run findByIdAndUpdate(userId, {$set: update}, {new: true, runValidators: true})
+     - Select PUBLIC_USER_PROJECTION and lean()
+     - Return 200 with updated public profile
+
+> These endpoints power the "current user" header, the "Find friends / Add friends" search with infinite scroll, and a simple profile edit screen (username/bio/avatar).
 
 ---
 
@@ -453,7 +475,7 @@ Use this section as ready-made sentences you can almost copy-paste into intervie
   - asyncHandler.js: promise-based error propagation (cleaned import)
   - mailgen.js: Mailtrap transporter + Mailgen content
 - validators/
-  - validate.js: registration + login chains (wired)
+  - validate.js: auth + users validators (register/login/forgot-password/profile update)
 - middlewares/
   - validator-middleware.js: correct ApiError usage
   - auth-middleware.js: verifies access token from cookies and attaches req.user
@@ -462,7 +484,7 @@ Use this section as ready-made sentences you can almost copy-paste into intervie
 
 ## 20) PRD vs Current Implementation (Delta)
 
-- Auth: register, verify-otp, login, logout implemented; refresh pending
+- Auth: register, verify-otp, login, logout, forgot-password implemented; refresh using Redis-backed hashed tokens also implemented
 - Real-time: PRD targets Socket.IO and presence/typing/read receipts; not implemented yet
 - Media: Cloudinary/multer deps are present but not wired; no upload routes yet
 - Notifications and unread counts: not implemented

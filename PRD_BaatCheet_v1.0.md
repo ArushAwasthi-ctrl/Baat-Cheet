@@ -237,19 +237,20 @@ File Upload → Cloudinary → MongoDB (URL reference)
 ||---------|-----------|-------------|------|--------|
 || GET | `/api/users/me` | Get current logged-in user profile | ✅ | ✅ Implemented |
 || GET | `/api/users` | List/search users with cursor-based pagination (excludes self) | ✅ | ✅ Implemented |
-|| GET | `/api/users/:id` | Get user profile by ID | ✅ | Planned |
-|| PUT | `/api/users/profile` | Update own profile (username, bio, avatar) | ✅ | Planned |
+|| GET | `/api/users/:id` | Get user profile by ID | ✅ | ✅ Implemented |
+|| PUT | `/api/users/profile` | Update own profile (username, bio, avatar) | ✅ | ✅ Implemented |
 || PUT | `/api/users/status` | Update presence/status | ✅ | Planned |
 
 ---
 
 ### 💬 Chats (`/api/chats`)
-| Method | Endpoint | Description | Auth |
-|---------|-----------|-------------|------|
-| POST | `/api/chats` | Create 1-to-1 chat | ✅ |
-| GET | `/api/chats` | Get all chats for logged-in user | ✅ |
-| GET | `/api/chats/:id` | Get specific chat details | ✅ |
-| DELETE | `/api/chats/:id` | Delete chat | ✅ |
+|| Method | Endpoint | Description | Auth |
+||---------|-----------|-------------|------|
+|| POST | `/api/chats` | Create or fetch a 1-to-1 chat between two users (REST, used now and later by Socket.IO) | ✅ |
+|| POST | `/api/chats/group` | Create a group chat with at least 3 members (1 admin + members) (REST) | ✅ |
+|| GET | `/api/chats` | List all chats for logged-in user with last message + pagination (REST, used for chat sidebar) | ✅ |
+|| GET | `/api/chats/:id` | Get chat details (participants, admins, metadata) | ✅ |
+|| DELETE | `/api/chats/:id` | Delete chat (admin-only, optional) | ✅ |
 
 ---
 
@@ -265,12 +266,12 @@ File Upload → Cloudinary → MongoDB (URL reference)
 ---
 
 ### 📨 Messages (`/api/messages`)
-| Method | Endpoint | Description | Auth |
-|---------|-----------|-------------|------|
-| POST | `/api/messages` | Send message (text/file) | ✅ |
-| GET | `/api/messages/:chatId` | Get all messages of a chat | ✅ |
-| PUT | `/api/messages/:id/read` | Mark message as read | ✅ |
-| DELETE | `/api/messages/:id` | Delete message | ✅ |
+|| Method | Endpoint | Description | Auth |
+||---------|-----------|-------------|------|
+|| POST | `/api/messages` | Send a message in a chat (text + optional attachments) (REST, used now and can be reused under Socket.IO) | ✅ |
+|| GET | `/api/messages/:chatId` | Get paginated messages of a chat (cursor-based infinite scroll) | ✅ |
+|| POST | `/api/chats/:chatId/mark-read` | Mark messages up to a given point as read by the current user | ✅ |
+|| DELETE | `/api/messages/:id` | Soft-delete a message (optional) | ✅ |
 
 ---
 
@@ -283,11 +284,19 @@ File Upload → Cloudinary → MongoDB (URL reference)
 ---
 
 ### 🔔 Notifications (`/api/notifications`)
-| Method | Endpoint | Description | Auth |
-|---------|-----------|-------------|------|
-| GET | `/api/notifications` | Get all notifications | ✅ |
-| PUT | `/api/notifications/read` | Mark notifications as read | ✅ |
-| GET | `/api/notifications/unread-count` | Get unread message count | ✅ |
+|| Method | Endpoint | Description | Auth |
+||---------|-----------|-------------|------|
+|| GET | `/api/notifications` | Get all notifications | ✅ |
+|| PUT | `/api/notifications/read` | Mark notifications as read | ✅ |
+|| GET | `/api/notifications/unread-count` | Get unread message count | ✅ |
+
+---
+
+### 🔌 Real-time Events (Socket.IO, planned)
+- `message:new` – broadcast a new message to all participants of a chat.
+- `message:read` – notify participants when a message is marked as read.
+- `typing:start` / `typing:stop` – show when a user is typing in a chat.
+- `presence:update` – broadcast online/offline and lastSeen changes.
 
 ---
 
