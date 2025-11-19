@@ -1,4 +1,4 @@
-import { body } from "express-validator";
+import { body, param, query } from "express-validator";
 
 const userRegisterValidator = () => {
   return [
@@ -103,10 +103,69 @@ const userUpdateProfileValidator = () => {
       .withMessage("Avatar must be a valid URL"),
   ];
 };
+
+const createDirectChatValidator = () => {
+  return [
+    body("userId")
+      .trim()
+      .notEmpty()
+      .withMessage("userId is required")
+      .isMongoId()
+      .withMessage("userId must be a valid Mongo ID"),
+  ];
+};
+
+const createGroupChatValidator = () => {
+  return [
+    body("name")
+      .trim()
+      .notEmpty()
+      .withMessage("Group name is required")
+      .isLength({ min: 3, max: 60 })
+      .withMessage("Group name must be between 3 and 60 characters"),
+    body("participants")
+      .isArray({ min: 2 })
+      .withMessage("At least 2 other members are required"),
+    body("participants.*")
+      .isString()
+      .trim()
+      .notEmpty()
+      .withMessage("Participant IDs cannot be empty")
+      .bail()
+      .isMongoId()
+      .withMessage("Participant IDs must be valid Mongo IDs"),
+  ];
+};
+
+const getChatByIdValidator = () => {
+  return [
+    param("chatId")
+      .trim()
+      .isMongoId()
+      .withMessage("chatId must be a valid Mongo ID"),
+  ];
+};
+
+const getUserChatsValidator = () => {
+  return [
+    query("cursor")
+      .optional()
+      .isISO8601()
+      .withMessage("cursor must be a valid ISO date string"),
+    query("limit")
+      .optional()
+      .isInt({ min: 1, max: 50 })
+      .withMessage("limit must be between 1 and 50"),
+  ];
+};
 export {
   userRegisterValidator,
   userLoginValidator,
   userForgotPasswordValidator,
   userForgotPasswordOtpValidator,
-  userUpdateProfileValidator
+  userUpdateProfileValidator,
+  createDirectChatValidator,
+  createGroupChatValidator,
+  getChatByIdValidator,
+  getUserChatsValidator,
 };

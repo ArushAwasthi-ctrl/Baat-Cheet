@@ -3,3 +3,6 @@ export const PUBLIC_USER_PROJECTION =
 
 export const LIST_USER_PROJECTION =
   "username avatar lastSeen status createdAt";
+
+export const CHAT_PARTICIPANT_PROJECTION =
+  "_id username avatar status lastSeen";

@@ -41,7 +41,7 @@ const ChatSchema = new mongoose.Schema(
     // When the last message was sent (used to sort chats by activity)
     lastMessageAt: {
       type: Date,
-      default: null,
+      default: Date.now,
     },
   },
   { timestamps: true },

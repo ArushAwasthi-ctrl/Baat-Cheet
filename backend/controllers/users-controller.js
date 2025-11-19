@@ -42,14 +42,13 @@ const getAllUsers = asyncHandler(async (req, res) => {
   let { search = "", cursor = null, limit = 20 } = req.query;
   limit = Math.min(parseInt(limit, 10) || 20, 50);
 
-  //-------------------------------------------------------
-  // SANITIZE SEARCH (prevent regex injection)
-  //-------------------------------------------------------
+  
+// SANITIZE SEARCH (prevent regex injection)
+  
   search = escapeRegex(search.trim());
 
-  //-------------------------------------------------------
-  // Build Filter Object (cleaner + faster)
-  //-------------------------------------------------------
+// Build Filter Object (cleaner + faster)
+  
   const filter = {
     _id: { $ne: currentUser._id },
     ...(cursor && Types.ObjectId.isValid(cursor)
@@ -64,10 +63,7 @@ const getAllUsers = asyncHandler(async (req, res) => {
         }
       : {}),
   };
-
-  //-------------------------------------------------------
   // Fetch Users
-  //-------------------------------------------------------
   const users = await User.find(filter)
     .sort({ _id: 1 })
     .limit(limit)
@@ -156,5 +152,10 @@ const updateProfile = asyncHandler(async (req, res) => {
     .status(200)
     .json(new ApiResponse(200, updatedUser, "Profile updated successfully"));
 });
+
+
+//------------------------------------------------------------------------
+// DELETE PROFILE OF CURRENT USER
+// -----------------------------------------------------------------------
 
 export { getCurrentUser, getAllUsers, getIndividualUser, updateProfile };

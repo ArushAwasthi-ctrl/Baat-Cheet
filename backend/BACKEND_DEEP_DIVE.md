@@ -286,6 +286,28 @@ Planned (per PRD) but not yet built:
 
 > These endpoints power the "current user" header, the "Find friends / Add friends" search with infinite scroll, and a simple profile edit screen (username/bio/avatar).
 
+### 9.3 Chats Routes (routes/chats-routes.js mounted at /api/chats)
+
+These REST endpoints give us a usable chat experience even before Socket.IO is introduced, and their controller logic can be reused inside socket event handlers later:
+
+1. **POST /** – `createOrGetDirectChat`
+   - Middleware chain: `authValidator` → `createDirectChatValidator()` → `validate`.
+   - Validates `userId`, blocks self-chat, ensures the target user exists, and either returns the existing direct conversation or creates one. Participants are populated via `CHAT_PARTICIPANT_PROJECTION` so every response consistently returns `_id`, `username`, `avatar`, `status`, and `lastSeen`.
+
+2. **POST /group** – `createorGetGroupChat`
+   - Middleware chain: `authValidator` → `createGroupChatValidator()` → `validate`.
+   - Trims the group name, normalizes member IDs, enforces “you + at least two others,” prevents duplicate groups per admin, and returns the populated group document.
+
+3. **GET /** – `getUserChats`
+   - Middleware chain: `authValidator` → `getUserChatsValidator()` → `validate`.
+   - Cursor-based pagination on `lastMessageAt` (capped at 50 results per page) and returns ISO-formatted `nextCursor` values so the frontend can keep scrolling.
+
+4. **GET /:chatId** – `getChatById`
+   - Middleware chain: `authValidator` → `getChatByIdValidator()` → `validate`.
+   - Ensures the requester is a participant before returning the chat payload, preventing metadata leaks outside the participant list.
+
+> Message CRUD, read receipts, and media uploads are still pending; once those controllers exist we’ll extend this router with `/api/chats/:chatId/messages` endpoints following the same validation/error-handling pattern.
+
 ---
 
 ## 10) Error and Response Conventions
@@ -330,9 +352,8 @@ Production suggestions:
 ## 13) What’s Not Yet Implemented (but planned per PRD)
 
 - Socket.IO real-time server (and Redis adapter for horizontal scaling)
-- Refresh route (token rotation/verification against Redis)
 - Presence, typing indicators, read receipts
-- Chat/Group/Message/Media modules
+- Message + media REST APIs (chat list/create exist; message CRUD + attachments pending)
 - Cloudinary upload pipeline (multer + multer-storage-cloudinary are installed but unused)
 - Health/readiness endpoints and metrics
 - Comprehensive tests and CI
@@ -423,12 +444,12 @@ Optional (recommended):
 
 ## 17) Suggested Next Steps (Backlog)
 
-- Implement refresh route (cookie-based) with hashed-token verification and rotation
-- Attach Socket.IO to HTTP server and add @socket.io/redis-adapter for scale-out
+- Ship message REST endpoints (send/list/mark-read) and keep `Chat.lastMessage` + `lastMessageAt` in sync
+- Attach Socket.IO to the existing HTTP server and add @socket.io/redis-adapter for scale-out
 - Implement rate limiting, sanitizer (express-mongo-sanitize), hpp, and request size limits
 - Add /healthz and readiness checks (Mongo/Redis status)
 - Create .env.example documenting all keys (incl. CORS_ORIGINS, MONGODB_URI)
-- Add tests (Jest/Vitest + Supertest) for register/verify/login/logout flows
+- Add tests (Jest/Vitest + Supertest) for auth + chat flows
 
 ---
 
@@ -454,7 +475,7 @@ Use this section as ready-made sentences you can almost copy-paste into intervie
 ## 19) Appendix: File-by-File Notes
 
 - app.js
-  - Parses bodies and cookies; env-driven CORS; helmet; compression; morgan; mounts /api/auth and /api/users
+  - Parses bodies and cookies; env-driven CORS; helmet; compression; morgan; mounts /api/auth, /api/users, and /api/chats
   - Error middleware placed after routes; 404 handler present
 - index.js
   - Loads env, connects Mongo/Redis, creates HTTP server and listens
@@ -463,6 +484,11 @@ Use this section as ready-made sentences you can almost copy-paste into intervie
   - registerUser: OTP via crypto.randomInt, rate-limit via Redis, email OTP using Mailgen
   - verifyOtp: creates user, issues JWTs, sets cookies, stores hashed refresh in Redis
   - loginUser/logoutUser: implemented; cookies only (no tokens in body)
+- controllers/chats-controller.js
+  - createOrGetDirectChat: validates target user, blocks self-chat, reuses projection constant for consistent participant payloads
+  - createorGetGroupChat: normalizes member list, enforces min participants, prevents duplicate groups per admin
+  - getChatById: guards against non-participants accessing chat metadata
+  - getUserChats: cursor pagination on `lastMessageAt` with capped limits and ISO next cursor values
 - models/Users.js
   - User schema with username/email/password/avatar/bio/status/lastSeen/friends
   - Compound index on username/email for fast search
@@ -475,7 +501,7 @@ Use this section as ready-made sentences you can almost copy-paste into intervie
   - asyncHandler.js: promise-based error propagation (cleaned import)
   - mailgen.js: Mailtrap transporter + Mailgen content
 - validators/
-  - validate.js: auth + users validators (register/login/forgot-password/profile update)
+  - validate.js: auth + users validators plus chat validators (direct/group creation, chatId, cursor/limit)
 - middlewares/
   - validator-middleware.js: correct ApiError usage
   - auth-middleware.js: verifies access token from cookies and attaches req.user
@@ -485,6 +511,7 @@ Use this section as ready-made sentences you can almost copy-paste into intervie
 ## 20) PRD vs Current Implementation (Delta)
 
 - Auth: register, verify-otp, login, logout, forgot-password implemented; refresh using Redis-backed hashed tokens also implemented
+- Chats: direct/group creation + chat listing implemented over REST; message CRUD and read receipts still planned
 - Real-time: PRD targets Socket.IO and presence/typing/read receipts; not implemented yet
 - Media: Cloudinary/multer deps are present but not wired; no upload routes yet
 - Notifications and unread counts: not implemented
@@ -504,6 +531,7 @@ Applied
 - Removed ioredis from dependencies (single shared Redis client wrapper instead)
 - Fixed ApiError usage in validator-middleware (correct params)
 - Implemented forgot-password flow (Redis-backed OTP + strong password validation)
+- Added REST chat endpoints with validation + shared participant projection
 
 Remaining
 - Add /auth/refresh and token rotation strategy
