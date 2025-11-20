@@ -158,6 +158,73 @@ const getUserChatsValidator = () => {
       .withMessage("limit must be between 1 and 50"),
   ];
 };
+
+const sendMessageValidator = () => {
+  return [
+    body("chatId")
+      .trim()
+      .notEmpty()
+      .withMessage("chatId is required")
+      .isMongoId()
+      .withMessage("chatId must be a valid Mongo ID"),
+    body("content")
+      .optional()
+      .trim()
+      .isLength({ max: 5000 })
+      .withMessage("Content must be at most 5000 characters"),
+    body("attachments")
+      .optional()
+      .isArray()
+      .withMessage("attachments must be an array"),
+    body("attachments.*.url")
+      .optional()
+      .isURL()
+      .withMessage("Attachment URL must be valid"),
+    body("attachments.*.type")
+      .optional()
+      .isIn(["image", "file"])
+      .withMessage("Attachment type must be 'image' or 'file'"),
+    body().custom((value) => {
+      // At least one of content or attachments must exist
+      if (!value.content?.trim() && (!value.attachments || value.attachments.length === 0)) {
+        throw new Error("Message must have either content or attachments");
+      }
+      return true;
+    }),
+  ];
+};
+
+const getMessagesValidator = () => {
+  return [
+    param("chatId")
+      .trim()
+      .isMongoId()
+      .withMessage("chatId must be a valid Mongo ID"),
+    query("cursor")
+      .optional()
+      .isString()
+      .withMessage("cursor must be a string (ObjectId or ISO date)"),
+    query("limit")
+      .optional()
+      .isInt({ min: 1, max: 50 })
+      .withMessage("limit must be between 1 and 50"),
+  ];
+};
+
+const markMessagesReadValidator = () => {
+  return [
+    param("chatId")
+      .trim()
+      .isMongoId()
+      .withMessage("chatId must be a valid Mongo ID"),
+    body("messageId")
+      .optional()
+      .trim()
+      .isMongoId()
+      .withMessage("messageId must be a valid Mongo ID"),
+  ];
+};
+
 export {
   userRegisterValidator,
   userLoginValidator,
@@ -168,4 +235,7 @@ export {
   createGroupChatValidator,
   getChatByIdValidator,
   getUserChatsValidator,
+  sendMessageValidator,
+  getMessagesValidator,
+  markMessagesReadValidator,
 };

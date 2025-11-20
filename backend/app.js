@@ -4,9 +4,11 @@ import cookieParser from "cookie-parser";
 import helmet from "helmet";
 import compression from "compression";
 import morgan from "morgan";
+// Routers
 import Authrouter from "./routes/auth-routes.js";
 import UserRouter from "./routes/users-routes.js";
 import ChatRouter from "./routes/chats-routes.js";
+import MessageRouter from "./routes/messages-routes.js";
 
 const app = express();
 
@@ -45,6 +47,7 @@ app.use(morgan(process.env.NODE_ENV === "production" ? "combined" : "dev"));
 app.use("/api/auth", Authrouter);
 app.use("/api/users", UserRouter);
 app.use("/api/chats", ChatRouter);
+app.use("/api/messages", MessageRouter);
 
 // 404 handler
 app.use((req, res, next) => {
