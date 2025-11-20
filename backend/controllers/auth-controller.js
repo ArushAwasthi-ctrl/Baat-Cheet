@@ -197,7 +197,14 @@ const loginUser = asyncHandler(async (req, res) => {
   const { email, password } = req.body;
 
   //  Check user existence
-  const user = await User.findOne({ email });
+  const user = await User.findOneAndUpdate(
+    { email },
+    {
+      $set: {
+        status: "online",
+      },
+    },
+  );
   if (!user) throw new ApiError(404, "User not found");
 
   //  Verify account
@@ -223,6 +230,8 @@ const loginUser = asyncHandler(async (req, res) => {
   //  Set cookies
   res.cookie("accessToken", accessToken, accessCookieOptions);
   res.cookie("refreshToken", refreshToken, refreshCookieOptions);
+
+  // User is online when logged in
 
   // Success response
   return res.status(200).json(
