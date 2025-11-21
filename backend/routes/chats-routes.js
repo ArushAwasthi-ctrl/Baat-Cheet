@@ -6,6 +6,7 @@ import {
   getUserChats,
   updateGroupInfo,
   addMember,
+  removeMembers,
 } from "../controllers/chats-controller.js";
 import authValidator from "../middlewares/auth-middleware.js";
 import validate from "../middlewares/validator-middleware.js";
@@ -16,6 +17,7 @@ import {
   getChatByIdValidator,
   getUserChatsValidator,
   groupInfoValidator,
+  removeMemberValidator,
 } from "../validators/validate.js";
 const ChatRouter = new Router();
 
@@ -47,6 +49,7 @@ ChatRouter.get(
   validate,
   getChatById,
 );
+
 ChatRouter.post(
   "/:chatId",
   authValidator,
@@ -55,10 +58,17 @@ ChatRouter.post(
   updateGroupInfo,
 );
 ChatRouter.post(
-  "/:chatId/members",
+  "/:chatId/members/add",
   authValidator,
   addMemberValidator(),
   validate,
   addMember,
+);
+ChatRouter.post(
+  "/:chatId/members/remove",
+  authValidator,
+  removeMemberValidator(),
+  validate,
+  removeMembers,
 );
 export default ChatRouter;

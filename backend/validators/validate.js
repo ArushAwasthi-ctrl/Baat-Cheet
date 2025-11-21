@@ -249,13 +249,29 @@ const addMemberValidator = () => {
       .isMongoId()
       .withMessage("chatId must be a valid Mongo ID"),
 
-    body("memberId")
+    body("memberIds")
+      .isArray({ min: 1 })
+      .withMessage("memberIds must be a non-empty array"),
+
+    body("memberIds.*")
       .trim()
-      .notEmpty()
-      .withMessage("memberId is required")
-      .bail()
       .isMongoId()
-      .withMessage("memberId must be a valid Mongo ID"),
+      .withMessage("Each memberId must be a valid Mongo ID"),
+  ];
+};
+const removeMemberValidator = () => {
+  return [
+    param("chatId")
+      .trim()
+      .isMongoId()
+      .withMessage("chatId must be a valid Mongo ID"),
+    body("memberIds")
+      .isArray({ min: 1 })
+      .withMessage("memberIds must be a non-empty array"),
+    body("memberIds.*")
+      .trim()
+      .isMongoId()
+      .withMessage("Each memberId must be a valid Mongo ID"),
   ];
 };
 export {
@@ -273,4 +289,5 @@ export {
   markMessagesReadValidator,
   groupInfoValidator,
   addMemberValidator,
+  removeMemberValidator
 };

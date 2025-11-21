@@ -243,38 +243,32 @@ const updateGroupInfo = asyncHandler(async (req, res) => {
 // ------------------------ Add members in the group  -------------------
 //------------------------------------------------------------------------
 
-const addMember = asyncHandler(async (req, res) => {
+const addMembers = asyncHandler(async (req, res) => {
   const { chatId } = req.params;
-  const { memberId } = req.body;
+  const { memberIds } = req.body; // array
   const currentUserId = req.user._id;
 
   if (!Types.ObjectId.isValid(chatId)) {
     throw new ApiError(400, "Chat Id is invalid");
   }
-  if (!Types.ObjectId.isValid(memberId)) {
-    throw new ApiError(400, "Member Id is invalid");
-  }
 
   const chat = await Chat.findById(chatId);
-  if (!chat) {
-    throw new ApiError(404, "Chat not found");
-  }
-  if (chat.type !== "group") {
-    throw new ApiError(400, "Not a group chat");
-  }
+  if (!chat) throw new ApiError(404, "Chat not found");
+  if (chat.type !== "group") throw new ApiError(400, "Not a group chat");
 
   const isAdmin = chat.admins.some(
     (id) => id.toString() === currentUserId.toString(),
   );
-  if (!isAdmin) {
-    throw new ApiError(403, "Only admins can update group");
-  }
+  if (!isAdmin) throw new ApiError(403, "Only admins can update group");
 
-  // If already a participant, just return current chat (idempotent)
-  const alreadyParticipant = chat.participants.some(
-    (id) => id.toString() === memberId.toString(),
-  );
-  if (alreadyParticipant) {
+  // normalize + dedupe
+  const uniqueIds = [...new Set(memberIds.map(String))];
+
+  // filter out already-participants
+  const existing = chat.participants.map((id) => id.toString());
+  const newIds = uniqueIds.filter((id) => !existing.includes(id));
+
+  if (newIds.length === 0) {
     const populated = await Chat.findById(chatId)
       .populate("participants", CHAT_PARTICIPANT_PROJECTION)
       .populate("admins", "_id username avatar")
@@ -283,14 +277,18 @@ const addMember = asyncHandler(async (req, res) => {
     return res
       .status(200)
       .json(
-        new ApiResponse(200, populated, "Member is already part of the group"),
+        new ApiResponse(
+          200,
+          populated,
+          "No new members to add (already in group)",
+        ),
       );
   }
 
   const updatedChat = await Chat.findByIdAndUpdate(
     chatId,
     {
-      $addToSet: { participants: memberId },
+      $addToSet: { participants: { $each: newIds } },
     },
     { new: true },
   )
@@ -300,7 +298,66 @@ const addMember = asyncHandler(async (req, res) => {
 
   return res
     .status(200)
-    .json(new ApiResponse(200, updatedChat, "Member added successfully"));
+    .json(new ApiResponse(200, updatedChat, "Members added successfully"));
+});
+
+// ------------------------------------------------------------------------
+// ------------------------ Remove members in the group  ----------------
+//------------------------------------------------------------------------
+
+const removeMembers = asyncHandler(async (req, res) => {
+  const currentUserId = req.user._id;
+  const { chatId } = req.params;
+  const { memberIds } = req.body;
+
+  if (!Types.ObjectId.isValid(chatId)) {
+    throw new ApiError(400, "Chat Id is invalid");
+  }
+
+  const chat = await Chat.findById(chatId);
+  if (!chat) throw new ApiError(404, "Chat not found");
+  if (chat.type !== "group") throw new ApiError(400, "Not a group chat");
+
+  const isAdmin = chat.admins.some(
+    (id) => id.toString() === currentUserId.toString(),
+  );
+  if (!isAdmin) throw new ApiError(403, "Only admins can update group");
+
+  // normalize + dedupe requested ids
+  const uniqueIds = [...new Set(memberIds.map(String))];
+
+  // ensure all requested ids are actually participants
+  const participantIds = chat.participants.map((id) => id.toString());
+  const notInParticipants = uniqueIds.filter(
+    (id) => !participantIds.includes(id),
+  );
+
+  if (notInParticipants.length > 0) {
+    throw new ApiError(
+      400,
+      "Some members are not part of the group",
+      false,
+      { notInParticipants },
+    );
+  }
+
+  const updatedChat = await Chat.findByIdAndUpdate(
+    chatId,
+    {
+      $pull: {
+        participants: { $in: uniqueIds },
+        admins: { $in: uniqueIds },
+      },
+    },
+    { new: true },
+  )
+    .populate("participants", CHAT_PARTICIPANT_PROJECTION)
+    .populate("admins", "_id username avatar")
+    .lean();
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, updatedChat, "Members removed successfully"));
 });
 
 // Export controllers
@@ -310,5 +367,6 @@ export {
   getChatById,
   getUserChats,
   updateGroupInfo,
-  addMember,
+  addMembers,
+  removeMembers,
 };
