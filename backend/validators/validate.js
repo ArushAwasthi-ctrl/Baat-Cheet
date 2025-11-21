@@ -186,7 +186,10 @@ const sendMessageValidator = () => {
       .withMessage("Attachment type must be 'image' or 'file'"),
     body().custom((value) => {
       // At least one of content or attachments must exist
-      if (!value.content?.trim() && (!value.attachments || value.attachments.length === 0)) {
+      if (
+        !value.content?.trim() &&
+        (!value.attachments || value.attachments.length === 0)
+      ) {
         throw new Error("Message must have either content or attachments");
       }
       return true;
@@ -225,6 +228,36 @@ const markMessagesReadValidator = () => {
   ];
 };
 
+const groupInfoValidator = () => {
+  return [
+    body("name")
+      .optional()
+      .trim()
+      .isLength({ min: 1, max: 50 })
+      .withMessage("Name must be between 1 and 50 characters"),
+    body("avatar")
+      .optional()
+      .trim()
+      .isURL()
+      .withMessage("Avatar must be a valid URL"),
+  ];
+};
+const addMemberValidator = () => {
+  return [
+    param("chatId")
+      .trim()
+      .isMongoId()
+      .withMessage("chatId must be a valid Mongo ID"),
+
+    body("memberId")
+      .trim()
+      .notEmpty()
+      .withMessage("memberId is required")
+      .bail()
+      .isMongoId()
+      .withMessage("memberId must be a valid Mongo ID"),
+  ];
+};
 export {
   userRegisterValidator,
   userLoginValidator,
@@ -238,4 +271,6 @@ export {
   sendMessageValidator,
   getMessagesValidator,
   markMessagesReadValidator,
+  groupInfoValidator,
+  addMemberValidator,
 };

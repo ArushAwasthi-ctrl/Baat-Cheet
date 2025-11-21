@@ -196,10 +196,119 @@ const getUserChats = asyncHandler(async (req, res) => {
   );
 });
 
+// ------------------------------------------------------------------------
+// ------------------------ Update the Group  ----------------------------
+// ------------------------------------------------------------------------
+const updateGroupInfo = asyncHandler(async (req, res) => {
+  const { chatId } = req.params;
+  const { name, avatar } = req.body;
+  const currentUserId = req.user._id;
+
+  if (!Types.ObjectId.isValid(chatId)) {
+    throw new ApiError(400, "Invalid chatId format");
+  }
+
+  const chat = await Chat.findById(chatId);
+  if (!chat) throw new ApiError(404, "Chat not found");
+  if (chat.type !== "group") throw new ApiError(400, "Not a group chat");
+
+  const isAdmin = chat.admins.some(
+    (id) => id.toString() === currentUserId.toString(),
+  );
+  if (!isAdmin) throw new ApiError(403, "Only admins can update group");
+
+  const update = {};
+  if (typeof name === "string" && name.trim()) update.name = name.trim();
+  if (typeof avatar === "string" && avatar.trim())
+    update.avatar = avatar.trim();
+
+  if (Object.keys(update).length === 0) {
+    throw new ApiError(400, "No valid fields to update");
+  }
+
+  const updated = await Chat.findByIdAndUpdate(
+    chatId,
+    { $set: update },
+    { new: true },
+  )
+    .populate("participants", "_id username avatar status lastSeen")
+    .populate("admins", "_id username avatar");
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, updated, "Group updated successfully"));
+});
+
+// ------------------------------------------------------------------------
+// ------------------------ Add members in the group  -------------------
+//------------------------------------------------------------------------
+
+const addMember = asyncHandler(async (req, res) => {
+  const { chatId } = req.params;
+  const { memberId } = req.body;
+  const currentUserId = req.user._id;
+
+  if (!Types.ObjectId.isValid(chatId)) {
+    throw new ApiError(400, "Chat Id is invalid");
+  }
+  if (!Types.ObjectId.isValid(memberId)) {
+    throw new ApiError(400, "Member Id is invalid");
+  }
+
+  const chat = await Chat.findById(chatId);
+  if (!chat) {
+    throw new ApiError(404, "Chat not found");
+  }
+  if (chat.type !== "group") {
+    throw new ApiError(400, "Not a group chat");
+  }
+
+  const isAdmin = chat.admins.some(
+    (id) => id.toString() === currentUserId.toString(),
+  );
+  if (!isAdmin) {
+    throw new ApiError(403, "Only admins can update group");
+  }
+
+  // If already a participant, just return current chat (idempotent)
+  const alreadyParticipant = chat.participants.some(
+    (id) => id.toString() === memberId.toString(),
+  );
+  if (alreadyParticipant) {
+    const populated = await Chat.findById(chatId)
+      .populate("participants", CHAT_PARTICIPANT_PROJECTION)
+      .populate("admins", "_id username avatar")
+      .lean();
+
+    return res
+      .status(200)
+      .json(
+        new ApiResponse(200, populated, "Member is already part of the group"),
+      );
+  }
+
+  const updatedChat = await Chat.findByIdAndUpdate(
+    chatId,
+    {
+      $addToSet: { participants: memberId },
+    },
+    { new: true },
+  )
+    .populate("participants", CHAT_PARTICIPANT_PROJECTION)
+    .populate("admins", "_id username avatar")
+    .lean();
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, updatedChat, "Member added successfully"));
+});
+
 // Export controllers
 export {
   createOrGetDirectChat,
   createorGetGroupChat,
   getChatById,
   getUserChats,
+  updateGroupInfo,
+  addMember,
 };
