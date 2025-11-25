@@ -333,12 +333,9 @@ const removeMembers = asyncHandler(async (req, res) => {
   );
 
   if (notInParticipants.length > 0) {
-    throw new ApiError(
-      400,
-      "Some members are not part of the group",
-      false,
-      { notInParticipants },
-    );
+    throw new ApiError(400, "Some members are not part of the group", false, {
+      notInParticipants,
+    });
   }
 
   const updatedChat = await Chat.findByIdAndUpdate(
@@ -358,6 +355,49 @@ const removeMembers = asyncHandler(async (req, res) => {
   return res
     .status(200)
     .json(new ApiResponse(200, updatedChat, "Members removed successfully"));
+});
+
+const promoteToAdmin = asyncHandler(async (req, res) => {
+  const currentUserId = req.user._id;
+  const { chatId } = req.params;
+  const { memberId } = req.body;
+
+  if (!Types.ObjectId.isValid(chatId)) {
+    throw new ApiError(400, "Chat Id is invalid");
+  }
+  if (!Types.ObjectId.isValid(memberId)) {
+    throw new ApiError(400, "Member Id is invalid");
+  }
+
+  const chat = await Chat.findById(chatId);
+  if (!chat) throw new ApiError(404, "Chat not found");
+  if (chat.type !== "group") throw new ApiError(400, "Not a group chat");
+
+  const isAdmin = chat.admins.some(
+    (id) => id.toString() === currentUserId.toString(),
+  );
+  if (!isAdmin) throw new ApiError(403, "Only admins can update group");
+
+  // Check if the member is participant or not
+
+  const participantId = chat.participants.map((id) => id.toString());
+  const isParticipant = participantId.includes(memberId);
+
+  if (!isParticipant) {
+    return new ApiError(
+      400,
+      "User is not a participant that is to be promoted",
+    );
+  }
+  const updatedChat = await Chat.findByIdAndUpdate(
+    chatId,
+    {
+      $addToSet: {
+        admins: [memberId],
+      },
+    },
+    { new: true },
+  );
 });
 
 // Export controllers

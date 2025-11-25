@@ -244,13 +244,16 @@ File Upload → Cloudinary → MongoDB (URL reference)
 ---
 
 ### 💬 Chats (`/api/chats`)
-|| Method | Endpoint | Description | Auth | Status |
-||---------|-----------|-------------|------|--------|
-|| POST | `/api/chats` | Create or fetch a 1-to-1 chat between two users (REST, used now and later by Socket.IO) | ✅ | ✅ Implemented |
-|| POST | `/api/chats/group` | Create a group chat with at least 3 members (1 admin + members) (REST) | ✅ | ✅ Implemented |
-|| GET | `/api/chats` | List all chats for logged-in user with last message + pagination (REST, used for chat sidebar) | ✅ | ✅ Implemented |
-|| GET | `/api/chats/:id` | Get chat details (participants, admins, metadata) | ✅ | ✅ Implemented |
-|| DELETE | `/api/chats/:id` | Delete chat (admin-only, optional) | ✅ | 🔜 Planned (not yet implemented) |
+||| Method | Endpoint | Description | Auth | Status |
+|||---------|-----------|-------------|------|--------|
+||| POST | `/api/chats` | Create or fetch a 1-to-1 chat between two users (REST, used now and later by Socket.IO) | ✅ | ✅ Implemented |
+||| POST | `/api/chats/group` | Create a group chat with at least 3 members (1 admin + members) (REST) | ✅ | ✅ Implemented |
+||| GET | `/api/chats` | List all chats for logged-in user with last message + pagination (REST, used for chat sidebar) | ✅ | ✅ Implemented |
+||| GET | `/api/chats/:id` | Get chat details (participants, admins, metadata) | ✅ | ✅ Implemented |
+||| POST | `/api/chats/:id` | Update group info (name, avatar) (admin-only, group chats) | ✅ | ✅ Implemented |
+||| POST | `/api/chats/:id/members/add` | Add one or more members to a group chat (admin-only) | ✅ | ✅ Implemented |
+||| POST | `/api/chats/:id/members/remove` | Remove one or more members from a group chat (admin-only) | ✅ | ✅ Implemented |
+||| DELETE | `/api/chats/:id` | Delete chat (admin-only, optional) | ✅ | 🔜 Planned (not yet implemented) |
 
 ---
 
