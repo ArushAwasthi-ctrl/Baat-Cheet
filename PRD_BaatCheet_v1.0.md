@@ -98,7 +98,7 @@ File Upload → Cloudinary → MongoDB (URL reference)
 
 || Layer | Technology | Purpose |
 ||-------|-------------|----------|
-|| Frontend | React + Vite + Tailwind CSS + TanStack React Query + Framer Motion | UI, async state, and animations |
+|| Frontend | React 19 + Vite 5 + Tailwind CSS 4 + shadcn/ui + React Router 7 + Redux Toolkit + Framer Motion | Landing, auth, chat UI, global state, animations |
 || Backend | Node.js + Express | REST APIs (auth, users, and core chats implemented) |
 || Database | MongoDB + Mongoose | Store users, chats, messages (users + chats implemented, messages planned) |
 || Cache / KV | Redis (Upstash/Render) | OTPs, hashed refresh tokens, rate limits (implemented); presence (planned) |
@@ -195,6 +195,20 @@ File Upload → Cloudinary → MongoDB (URL reference)
  ┣ 📄 index.js            # Server bootstrap (env, DB, Redis, HTTP server)
  ┣ 📄 BACKEND_DEEP_DIVE.md# Deep backend notes + interview prep
  ┗ 📄 package.json        # Backend scripts and dependencies
+```
+
+### Frontend (work-in-progress)
+
+```
+/frontend
+ ┣ 📁 src/
+ ┃ ┣ components/      # shadcn/ui primitives + shared atoms
+ ┃ ┣ pages/           # Landing, Auth, Chat, Profile
+ ┃ ┣ store/           # Redux Toolkit store + slices
+ ┃ ┣ services/        # Axios instance + API services
+ ┃ ┗ lib/             # utilities (cn helper, hooks)
+ ┣ 📄 FRONTEND_DEEP_DIVE.md  # Detailed frontend architecture & interview notes
+ ┗ 📄 vite.config.js, package.json, etc.
 ```
 
 ---

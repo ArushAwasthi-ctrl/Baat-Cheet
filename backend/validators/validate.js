@@ -274,6 +274,22 @@ const removeMemberValidator = () => {
       .withMessage("Each memberId must be a valid Mongo ID"),
   ];
 };
+
+const promoteToAdminValidator = () => {
+  return [
+    param("chatId")
+      .trim()
+      .isMongoId()
+      .withMessage("chatId must be a valid Mongo ID"),
+    body("memberId")
+      .trim()
+      .notEmpty()
+      .withMessage("memberId is required")
+      .isMongoId()
+      .withMessage("memberId must be a valid Mongo ID"),
+  ];
+};
+
 export {
   userRegisterValidator,
   userLoginValidator,
@@ -289,5 +305,6 @@ export {
   markMessagesReadValidator,
   groupInfoValidator,
   addMemberValidator,
-  removeMemberValidator
+  removeMemberValidator,
+  promoteToAdminValidator,
 };

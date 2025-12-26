@@ -376,28 +376,38 @@ const promoteToAdmin = asyncHandler(async (req, res) => {
   const isAdmin = chat.admins.some(
     (id) => id.toString() === currentUserId.toString(),
   );
-  if (!isAdmin) throw new ApiError(403, "Only admins can update group");
+  if (!isAdmin) throw new ApiError(403, "Only admins can promote members");
 
   // Check if the member is participant or not
-
-  const participantId = chat.participants.map((id) => id.toString());
-  const isParticipant = participantId.includes(memberId);
+  const participantIds = chat.participants.map((id) => id.toString());
+  const isParticipant = participantIds.includes(memberId);
 
   if (!isParticipant) {
-    return new ApiError(
-      400,
-      "User is not a participant that is to be promoted",
-    );
+    throw new ApiError(400, "User is not a participant of this group");
   }
+
+  // Check if already an admin
+  const alreadyAdmin = chat.admins.some((id) => id.toString() === memberId);
+  if (alreadyAdmin) {
+    throw new ApiError(400, "User is already an admin");
+  }
+
   const updatedChat = await Chat.findByIdAndUpdate(
     chatId,
     {
       $addToSet: {
-        admins: [memberId],
+        admins: memberId,
       },
     },
     { new: true },
-  );
+  )
+    .populate("participants", CHAT_PARTICIPANT_PROJECTION)
+    .populate("admins", "_id username avatar")
+    .lean();
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, updatedChat, "Member promoted to admin successfully"));
 });
 
 // Export controllers
@@ -409,4 +419,5 @@ export {
   updateGroupInfo,
   addMembers,
   removeMembers,
+  promoteToAdmin,
 };
