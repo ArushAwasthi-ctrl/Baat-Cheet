@@ -77,7 +77,8 @@ const ChatSidebar = ({ selectedChat, onSelectChat }) => {
 
   // Filter chats based on search and filter type
   const filteredChats = useMemo(() => {
-    return chats.filter((chat) => {
+    return (chats || []).filter((chat) => {
+      if (!chat) return false;
       const displayName = getChatDisplayName(chat);
       const matchesSearch = displayName
         .toLowerCase()
