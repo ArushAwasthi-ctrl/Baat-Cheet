@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useSelector, useDispatch } from "react-redux";
 import {
@@ -12,6 +12,7 @@ import {
   Check,
   CheckCheck,
   Loader2,
+  ArrowLeft,
 } from "lucide-react";
 import { cn, formatMessageTime } from "@/lib/utils";
 import Avatar from "@/components/ui/Avatar";
@@ -22,18 +23,24 @@ import {
   markMessagesAsRead,
 } from "@/store/slices/messageSlice";
 import { updateChatLastMessage } from "@/store/slices/chatSlice";
+import { useTypingIndicator } from "@/hooks/useSocket";
+import socketService from "@/services/socketService";
+import { toast } from "sonner";
 
-const ChatArea = ({ chat, onToggleInfo }) => {
+const ChatArea = ({ chat, onToggleInfo, onBack, isMobile = false }) => {
   const dispatch = useDispatch();
   const [message, setMessage] = useState("");
-  const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
   const messagesContainerRef = useRef(null);
+  const typingTimeoutRef = useRef(null);
 
   const { user } = useSelector((state) => state.auth);
   const { messagesByChat, loadingByChat, paginationByChat, isSending } =
     useSelector((state) => state.messages);
+
+  // Get typing users for this chat
+  const typingUsers = useTypingIndicator(chat?._id);
 
   const messages = chat ? messagesByChat[chat._id] || [] : [];
   const isLoadingMessages = chat ? loadingByChat[chat._id] : false;
@@ -99,6 +106,42 @@ const ChatArea = ({ chat, onToggleInfo }) => {
       inputRef.current.focus();
     }
   }, [chat?._id]);
+
+  // Handle typing indicator
+  const handleTyping = useCallback(() => {
+    if (!chat?._id) return;
+
+    socketService.startTyping(chat._id);
+
+    // Clear existing timeout
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+
+    // Set timeout to stop typing after 2 seconds of inactivity
+    typingTimeoutRef.current = setTimeout(() => {
+      socketService.stopTyping(chat._id);
+    }, 2000);
+  }, [chat?._id]);
+
+  // Cleanup typing timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+      if (chat?._id) {
+        socketService.stopTyping(chat._id);
+      }
+    };
+  }, [chat?._id]);
+
+  // Show coming soon toast for unavailable features
+  const showComingSoon = (feature) => {
+    toast.info(`${feature} coming soon!`, {
+      duration: 2000,
+    });
+  };
 
   const handleSend = async () => {
     if (!message.trim() || !chat?._id || isSending) return;
@@ -186,35 +229,54 @@ const ChatArea = ({ chat, onToggleInfo }) => {
   return (
     <div className="h-full flex flex-col bg-background">
       {/* Header */}
-      <header className="h-16 px-4 flex items-center justify-between border-b border-border bg-card/50 backdrop-blur-sm">
-        <div
-          className="flex items-center gap-3 cursor-pointer"
-          onClick={onToggleInfo}
-        >
-          <div className="relative">
-            <Avatar name={getChatDisplayName()} src={getChatAvatar()} size="md" />
-            {isOtherUserOnline() && (
-              <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-card rounded-full" />
-            )}
-          </div>
-          <div>
-            <h2 className="font-semibold text-foreground">
-              {getChatDisplayName()}
-            </h2>
-            <p className="text-xs text-green-500">
-              {isOtherUserOnline() ? "Online" : "Offline"}
-            </p>
+      <header className="h-16 px-2 sm:px-4 flex items-center justify-between border-b border-border bg-card/50 backdrop-blur-sm">
+        <div className="flex items-center gap-2 sm:gap-3">
+          {isMobile && onBack && (
+            <button
+              onClick={onBack}
+              className="p-2 rounded-lg hover:bg-muted/50 transition-colors"
+            >
+              <ArrowLeft className="h-5 w-5 text-muted-foreground" />
+            </button>
+          )}
+          <div
+            className="flex items-center gap-2 sm:gap-3 cursor-pointer"
+            onClick={onToggleInfo}
+          >
+            <div className="relative">
+              <Avatar name={getChatDisplayName()} src={getChatAvatar()} size="md" />
+              {isOtherUserOnline() && (
+                <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-card rounded-full" />
+              )}
+            </div>
+            <div>
+              <h2 className="font-semibold text-foreground text-sm sm:text-base truncate max-w-[120px] sm:max-w-none">
+                {getChatDisplayName()}
+              </h2>
+              <p className="text-xs text-green-500">
+                {isOtherUserOnline() ? "Online" : "Offline"}
+              </p>
+            </div>
           </div>
         </div>
 
-        <div className="flex items-center gap-1">
-          <button className="p-2 rounded-lg hover:bg-muted/50 transition-colors">
+        <div className="flex items-center gap-0.5 sm:gap-1">
+          <button
+            onClick={() => showComingSoon("Voice calls")}
+            className="p-2 rounded-lg hover:bg-muted/50 transition-colors hidden sm:flex"
+          >
             <Phone className="h-5 w-5 text-muted-foreground" />
           </button>
-          <button className="p-2 rounded-lg hover:bg-muted/50 transition-colors">
+          <button
+            onClick={() => showComingSoon("Video calls")}
+            className="p-2 rounded-lg hover:bg-muted/50 transition-colors hidden sm:flex"
+          >
             <Video className="h-5 w-5 text-muted-foreground" />
           </button>
-          <button className="p-2 rounded-lg hover:bg-muted/50 transition-colors">
+          <button
+            onClick={() => showComingSoon("Message search")}
+            className="p-2 rounded-lg hover:bg-muted/50 transition-colors"
+          >
             <Search className="h-5 w-5 text-muted-foreground" />
           </button>
           <button
@@ -368,22 +430,28 @@ const ChatArea = ({ chat, onToggleInfo }) => {
         </AnimatePresence>
 
         {/* Typing Indicator */}
-        {isTyping && (
+        {typingUsers.length > 0 && (
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             className="flex items-center gap-2"
           >
             <Avatar
-              name={getChatDisplayName()}
-              src={getChatAvatar()}
+              name={typingUsers[0]?.username || "User"}
               size="sm"
             />
             <div className="px-4 py-3 rounded-2xl bg-muted rounded-bl-md">
-              <div className="flex gap-1">
-                <span className="w-2 h-2 bg-muted-foreground/50 rounded-full animate-bounce [animation-delay:-0.3s]" />
-                <span className="w-2 h-2 bg-muted-foreground/50 rounded-full animate-bounce [animation-delay:-0.15s]" />
-                <span className="w-2 h-2 bg-muted-foreground/50 rounded-full animate-bounce" />
+              <div className="flex items-center gap-2">
+                <div className="flex gap-1">
+                  <span className="w-2 h-2 bg-muted-foreground/50 rounded-full animate-bounce [animation-delay:-0.3s]" />
+                  <span className="w-2 h-2 bg-muted-foreground/50 rounded-full animate-bounce [animation-delay:-0.15s]" />
+                  <span className="w-2 h-2 bg-muted-foreground/50 rounded-full animate-bounce" />
+                </div>
+                <span className="text-xs text-muted-foreground ml-1">
+                  {typingUsers.length === 1
+                    ? `${typingUsers[0]?.username} is typing...`
+                    : `${typingUsers.length} people are typing...`}
+                </span>
               </div>
             </div>
           </motion.div>
@@ -395,7 +463,10 @@ const ChatArea = ({ chat, onToggleInfo }) => {
       {/* Input Area */}
       <div className="p-4 border-t border-border bg-card/50 backdrop-blur-sm">
         <div className="flex items-center gap-2">
-          <button className="p-2.5 rounded-full hover:bg-muted/50 transition-colors">
+          <button
+            onClick={() => showComingSoon("File attachments")}
+            className="p-2.5 rounded-full hover:bg-muted/50 transition-colors"
+          >
             <Paperclip className="h-5 w-5 text-muted-foreground" />
           </button>
           <div className="flex-1 relative">
@@ -403,12 +474,18 @@ const ChatArea = ({ chat, onToggleInfo }) => {
               ref={inputRef}
               type="text"
               value={message}
-              onChange={(e) => setMessage(e.target.value)}
+              onChange={(e) => {
+                setMessage(e.target.value);
+                handleTyping();
+              }}
               onKeyDown={handleKeyDown}
               placeholder="Type a message..."
               className="w-full h-11 px-4 pr-12 rounded-full bg-muted/50 border border-border text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
             />
-            <button className="absolute right-3 top-1/2 -translate-y-1/2 p-1 hover:bg-muted rounded-full transition-colors">
+            <button
+              onClick={() => showComingSoon("Emoji picker")}
+              className="absolute right-3 top-1/2 -translate-y-1/2 p-1 hover:bg-muted rounded-full transition-colors"
+            >
               <Smile className="h-5 w-5 text-muted-foreground" />
             </button>
           </div>

@@ -5,6 +5,7 @@ import mongoose from "mongoose";
 import dbCall from "./db/dbCall.js";
 import app from "./app.js";
 import redisCall, { redisClient } from "./redis/redisClient.js";
+import { initializeSocket } from "./socket/index.js";
 
 // Build MongoDB URI (prefer full URI from env)
 const buildMongoUri = () => {
@@ -21,6 +22,9 @@ const redisUrl = String(process.env.REDIS_URL);
 
 const server = http.createServer(app);
 
+// Initialize Socket.IO
+let io;
+
 const startServer = async () => {
   try {
     // Connect MongoDB
@@ -28,6 +32,11 @@ const startServer = async () => {
 
     // Connect Redis
     await redisCall(redisUrl);
+
+    // Initialize Socket.IO
+    io = initializeSocket(server);
+    app.set("io", io);
+    console.log("Socket.IO initialized");
 
     // Start HTTP server
     server.listen(PORT, () => {
@@ -38,6 +47,9 @@ const startServer = async () => {
     process.exit(1);
   }
 };
+
+// Export io for use in controllers
+export { io };
 
 const shutdown = async (signal) => {
   try {

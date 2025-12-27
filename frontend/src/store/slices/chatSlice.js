@@ -188,6 +188,25 @@ const chatSlice = createSlice({
         state.chats.unshift(newChat);
       }
     },
+    // Remove a chat from the list (when removed from group)
+    removeChat: (state, action) => {
+      const chatId = action.payload;
+      state.chats = state.chats.filter((c) => c._id !== chatId);
+      if (state.selectedChat?._id === chatId) {
+        state.selectedChat = null;
+      }
+    },
+    // Update a chat in the list (for real-time group updates)
+    updateChat: (state, action) => {
+      const updatedChat = action.payload;
+      const index = state.chats.findIndex((c) => c._id === updatedChat._id);
+      if (index !== -1) {
+        state.chats[index] = { ...state.chats[index], ...updatedChat };
+      }
+      if (state.selectedChat?._id === updatedChat._id) {
+        state.selectedChat = { ...state.selectedChat, ...updatedChat };
+      }
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -322,6 +341,8 @@ export const {
   incrementUnreadCount,
   resetUnreadCount,
   addChat,
+  removeChat,
+  updateChat,
 } = chatSlice.actions;
 
 export default chatSlice.reducer;

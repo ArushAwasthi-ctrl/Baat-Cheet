@@ -50,5 +50,14 @@ const ChatSchema = new mongoose.Schema(
 // Index on participants + lastMessageAt for fast "my chats" queries sorted by recent activity
 ChatSchema.index({ participants: 1, lastMessageAt: -1 });
 
+// Virtual field for isGroup
+ChatSchema.virtual("isGroup").get(function () {
+  return this.type === "group";
+});
+
+// Ensure virtuals are serialized
+ChatSchema.set("toJSON", { virtuals: true });
+ChatSchema.set("toObject", { virtuals: true });
+
 const Chat = mongoose.model("Chat", ChatSchema);
 export default Chat;

@@ -177,8 +177,8 @@ const messageSlice = createSlice({
             ...(state.messagesByChat[chatId] || []),
           ];
         } else {
-          // Initial load - messages come in reverse order from API
-          state.messagesByChat[chatId] = messages.reverse();
+          // Initial load - messages come in chronological order from API
+          state.messagesByChat[chatId] = messages;
         }
 
         state.paginationByChat[chatId] = { nextCursor, hasMore };

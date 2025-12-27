@@ -62,12 +62,16 @@ const SignupPage = () => {
     { label: "At least 6 characters", test: (p) => p?.length >= 6 },
     { label: "One uppercase letter", test: (p) => /[A-Z]/.test(p) },
     { label: "One number", test: (p) => /[0-9]/.test(p) },
-    { label: "One special character (!@#$%^&*)", test: (p) => /[!@#$%^&*]/.test(p) },
+    { label: "One special character", test: (p) => /[!@#$%^&*]/.test(p) },
   ];
 
   return (
-    <AuthLayout title="Create an account" subtitle="Start your journey with Baat Cheet">
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+    <AuthLayout
+      title="Create an account"
+      subtitle="Already have an account?"
+      isSignup={true}
+    >
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
         {/* Error Alert */}
         {error && (
           <motion.div
@@ -75,28 +79,28 @@ const SignupPage = () => {
             animate={{ opacity: 1, y: 0 }}
             className="flex items-center gap-2 p-3 rounded-lg bg-destructive/10 text-destructive text-sm"
           >
-            <AlertCircle className="h-4 w-4 flex-shrink-0" />
+            <AlertCircle className="h-4 w-4 shrink-0" />
             <span>{error}</span>
           </motion.div>
         )}
 
         {/* Username Field */}
         <div className="space-y-2">
-          <label className="text-sm font-medium text-foreground">Username</label>
+          <label className="text-sm font-medium text-foreground">Full Name</label>
           <Input
             type="text"
-            placeholder="johndoe"
+            placeholder="e.g. John Doe"
             icon={User}
             error={errors.username}
             {...register("username", {
-              required: "Username is required",
+              required: "Name is required",
               minLength: {
                 value: 3,
-                message: "Username must be at least 3 characters",
+                message: "Name must be at least 3 characters",
               },
               maxLength: {
                 value: 30,
-                message: "Username must be at most 30 characters",
+                message: "Name must be at most 30 characters",
               },
             })}
           />
@@ -107,10 +111,10 @@ const SignupPage = () => {
 
         {/* Email Field */}
         <div className="space-y-2">
-          <label className="text-sm font-medium text-foreground">Email</label>
+          <label className="text-sm font-medium text-foreground">Email Address</label>
           <Input
             type="email"
-            placeholder="you@example.com"
+            placeholder="name@work-email.com"
             icon={Mail}
             error={errors.email}
             {...register("email", {
@@ -167,14 +171,13 @@ const SignupPage = () => {
                 ))}
               </div>
               <p className="text-xs text-muted-foreground">
-                Password strength:{" "}
-                <span className="font-medium">{passwordStrength.label}</span>
+                Strength: <span className="font-medium">{passwordStrength.label}</span>
               </p>
             </div>
           )}
 
           {/* Password Requirements */}
-          <div className="grid grid-cols-2 gap-2 mt-3">
+          <div className="grid grid-cols-2 gap-1.5 mt-2">
             {requirements.map((req, index) => (
               <div
                 key={index}
@@ -193,40 +196,30 @@ const SignupPage = () => {
           )}
         </div>
 
+        {/* Terms Checkbox */}
+        <div className="flex items-start gap-2">
+          <input
+            type="checkbox"
+            id="terms"
+            className="mt-1 rounded border-border"
+            required
+          />
+          <label htmlFor="terms" className="text-xs text-muted-foreground">
+            I agree to the{" "}
+            <a href="#" className="text-primary hover:underline">
+              Terms of Service
+            </a>{" "}
+            and{" "}
+            <a href="#" className="text-primary hover:underline">
+              Privacy Policy
+            </a>
+          </label>
+        </div>
+
         {/* Submit Button */}
         <Button type="submit" className="w-full" isLoading={isLoading}>
           Create Account
         </Button>
-
-        {/* Terms */}
-        <p className="text-center text-xs text-muted-foreground">
-          By signing up, you agree to our{" "}
-          <a href="#" className="underline hover:text-foreground">
-            Terms of Service
-          </a>{" "}
-          and{" "}
-          <a href="#" className="underline hover:text-foreground">
-            Privacy Policy
-          </a>
-        </p>
-
-        {/* Divider */}
-        <div className="relative my-6">
-          <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-border" />
-          </div>
-          <div className="relative flex justify-center text-xs uppercase">
-            <span className="bg-card px-2 text-muted-foreground">or</span>
-          </div>
-        </div>
-
-        {/* Sign In Link */}
-        <p className="text-center text-sm text-muted-foreground">
-          Already have an account?{" "}
-          <Link to="/login" className="font-medium text-primary hover:underline">
-            Sign in
-          </Link>
-        </p>
       </form>
     </AuthLayout>
   );

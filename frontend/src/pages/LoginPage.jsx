@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { useDispatch, useSelector } from "react-redux";
 import { motion } from "framer-motion";
@@ -43,7 +42,11 @@ const LoginPage = () => {
   };
 
   return (
-    <AuthLayout title="Welcome back" subtitle="Sign in to continue to Baat Cheet">
+    <AuthLayout
+      title="Welcome back"
+      subtitle="Don't have an account?"
+      isSignup={false}
+    >
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
         {/* Error Alert */}
         {error && (
@@ -52,17 +55,17 @@ const LoginPage = () => {
             animate={{ opacity: 1, y: 0 }}
             className="flex items-center gap-2 p-3 rounded-lg bg-destructive/10 text-destructive text-sm"
           >
-            <AlertCircle className="h-4 w-4 flex-shrink-0" />
+            <AlertCircle className="h-4 w-4 shrink-0" />
             <span>{error}</span>
           </motion.div>
         )}
 
         {/* Email Field */}
         <div className="space-y-2">
-          <label className="text-sm font-medium text-foreground">Email</label>
+          <label className="text-sm font-medium text-foreground">Email Address</label>
           <Input
             type="email"
-            placeholder="you@example.com"
+            placeholder="name@example.com"
             icon={Mail}
             error={errors.email}
             {...register("email", {
@@ -107,24 +110,6 @@ const LoginPage = () => {
         <Button type="submit" className="w-full" isLoading={isLoading}>
           Sign In
         </Button>
-
-        {/* Divider */}
-        <div className="relative my-6">
-          <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-border" />
-          </div>
-          <div className="relative flex justify-center text-xs uppercase">
-            <span className="bg-card px-2 text-muted-foreground">or</span>
-          </div>
-        </div>
-
-        {/* Sign Up Link */}
-        <p className="text-center text-sm text-muted-foreground">
-          Don't have an account?{" "}
-          <Link to="/signup" className="font-medium text-primary hover:underline">
-            Sign up
-          </Link>
-        </p>
       </form>
     </AuthLayout>
   );

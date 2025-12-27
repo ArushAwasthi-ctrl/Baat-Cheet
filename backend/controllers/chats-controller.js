@@ -8,6 +8,22 @@ import { CHAT_PARTICIPANT_PROJECTION } from "../constants/projections.js";
 
 const MAX_CHAT_LIMIT = 50;
 
+// Helper to emit socket events
+const emitSocketEvent = (req, room, event, data) => {
+  const io = req.app.get("io");
+  if (io) {
+    io.to(room).emit(event, data);
+  }
+};
+
+// Helper to emit to specific user
+const emitToUser = (req, userId, event, data) => {
+  const io = req.app.get("io");
+  if (io) {
+    io.to(`user:${userId}`).emit(event, data);
+  }
+};
+
 //------------------------------------------------------------------------
 //------------------------ Create or Get Direct Chat ----------------------
 //------------------------------------------------------------------------
@@ -50,10 +66,13 @@ const createOrGetDirectChat = asyncHandler(async (req, res) => {
     .populate("participants", CHAT_PARTICIPANT_PROJECTION)
     .lean();
 
+  // Emit socket event to the other user about new chat
+  emitToUser(req, userId, "chat:new", { chat: populatedChat });
+
   return res
     .status(201)
     .json(
-      new ApiResponse(201, populatedChat, "Direct chat created successfully"),
+      new ApiResponse(201, { chat: populatedChat }, "Direct chat created successfully"),
     );
 });
 
@@ -116,12 +135,18 @@ const createorGetGroupChat = asyncHandler(async (req, res) => {
 
   const populatedGroup = await Chat.findById(newGroup._id)
     .populate("participants", CHAT_PARTICIPANT_PROJECTION)
+    .populate("admins", "_id username avatar")
     .lean();
+
+  // Emit socket event to all participants about new group
+  uniqueParticipantIds.forEach((participantId) => {
+    emitToUser(req, participantId, "chat:new", { chat: populatedGroup });
+  });
 
   return res
     .status(201)
     .json(
-      new ApiResponse(201, populatedGroup, "Group chat created successfully"),
+      new ApiResponse(201, { chat: populatedGroup }, "Group chat created successfully"),
     );
 });
 
@@ -137,6 +162,8 @@ const getChatById = asyncHandler(async (req, res) => {
 
   const chat = await Chat.findById(chatId)
     .populate("participants", CHAT_PARTICIPANT_PROJECTION)
+    .populate("admins", "_id username avatar")
+    .populate("lastMessage")
     .lean();
 
   if (!chat) throw new ApiError(404, "Chat does not exist");
@@ -148,7 +175,7 @@ const getChatById = asyncHandler(async (req, res) => {
 
   return res
     .status(200)
-    .json(new ApiResponse(200, chat, "Chat found successfully"));
+    .json(new ApiResponse(200, { chat }, "Chat found successfully"));
 });
 
 // ------------------------------------------------------------------------
@@ -232,11 +259,19 @@ const updateGroupInfo = asyncHandler(async (req, res) => {
     { new: true },
   )
     .populate("participants", "_id username avatar status lastSeen")
-    .populate("admins", "_id username avatar");
+    .populate("admins", "_id username avatar")
+    .lean();
+
+  // Emit socket event to all participants about group update
+  emitSocketEvent(req, `chat:${chatId}`, "group:updated", {
+    chatId,
+    chat: updated,
+    action: "infoUpdated",
+  });
 
   return res
     .status(200)
-    .json(new ApiResponse(200, updated, "Group updated successfully"));
+    .json(new ApiResponse(200, { chat: updated }, "Group updated successfully"));
 });
 
 // ------------------------------------------------------------------------
@@ -279,7 +314,7 @@ const addMembers = asyncHandler(async (req, res) => {
       .json(
         new ApiResponse(
           200,
-          populated,
+          { chat: populated },
           "No new members to add (already in group)",
         ),
       );
@@ -296,9 +331,22 @@ const addMembers = asyncHandler(async (req, res) => {
     .populate("admins", "_id username avatar")
     .lean();
 
+  // Emit socket event to existing participants
+  emitSocketEvent(req, `chat:${chatId}`, "group:updated", {
+    chatId,
+    chat: updatedChat,
+    action: "membersAdded",
+    newMembers: newIds,
+  });
+
+  // Emit socket event to new members about being added to group
+  newIds.forEach((memberId) => {
+    emitToUser(req, memberId, "chat:new", { chat: updatedChat });
+  });
+
   return res
     .status(200)
-    .json(new ApiResponse(200, updatedChat, "Members added successfully"));
+    .json(new ApiResponse(200, { chat: updatedChat }, "Members added successfully"));
 });
 
 // ------------------------------------------------------------------------
@@ -352,9 +400,22 @@ const removeMembers = asyncHandler(async (req, res) => {
     .populate("admins", "_id username avatar")
     .lean();
 
+  // Emit socket event to remaining participants
+  emitSocketEvent(req, `chat:${chatId}`, "group:updated", {
+    chatId,
+    chat: updatedChat,
+    action: "membersRemoved",
+    removedMembers: uniqueIds,
+  });
+
+  // Emit socket event to removed members
+  uniqueIds.forEach((memberId) => {
+    emitToUser(req, memberId, "chat:removed", { chatId });
+  });
+
   return res
     .status(200)
-    .json(new ApiResponse(200, updatedChat, "Members removed successfully"));
+    .json(new ApiResponse(200, { chat: updatedChat }, "Members removed successfully"));
 });
 
 const promoteToAdmin = asyncHandler(async (req, res) => {
@@ -405,9 +466,17 @@ const promoteToAdmin = asyncHandler(async (req, res) => {
     .populate("admins", "_id username avatar")
     .lean();
 
+  // Emit socket event to all participants
+  emitSocketEvent(req, `chat:${chatId}`, "group:updated", {
+    chatId,
+    chat: updatedChat,
+    action: "adminPromoted",
+    promotedMember: memberId,
+  });
+
   return res
     .status(200)
-    .json(new ApiResponse(200, updatedChat, "Member promoted to admin successfully"));
+    .json(new ApiResponse(200, { chat: updatedChat }, "Member promoted to admin successfully"));
 });
 
 // Export controllers

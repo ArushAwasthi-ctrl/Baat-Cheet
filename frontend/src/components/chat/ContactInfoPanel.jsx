@@ -1,7 +1,5 @@
 import { motion } from "framer-motion";
 import { useSelector } from "react-redux";
-import { Swiper, SwiperSlide } from "swiper/react";
-import { Navigation, Pagination } from "swiper/modules";
 import {
   X,
   User,
@@ -9,38 +7,25 @@ import {
   BellOff,
   Search,
   Ban,
-  FileText,
-  ChevronRight,
   Users,
   LogOut,
   UserPlus,
   Crown,
+  ArrowLeft,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import Avatar from "@/components/ui/Avatar";
+import { toast } from "sonner";
 
-// Import Swiper styles
-import "swiper/css";
-import "swiper/css/navigation";
-import "swiper/css/pagination";
-
-const ContactInfoPanel = ({ chat, onClose }) => {
+const ContactInfoPanel = ({ chat, onClose, onBack, isMobile = false }) => {
   const { user } = useSelector((state) => state.auth);
 
-  // Mock shared media - will be replaced with real data when file attachments are implemented
-  const sharedMedia = [
-    "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=200",
-    "https://images.unsplash.com/photo-1618556450994-a6a128ef0d9d?w=200",
-    "https://images.unsplash.com/photo-1614850523459-c2f4c699c52e?w=200",
-    "https://images.unsplash.com/photo-1618005198919-d3d4b5a92ead?w=200",
-    "https://images.unsplash.com/photo-1614851099511-773084f6911d?w=200",
-  ];
-
-  // Mock shared files
-  const sharedFiles = [
-    { name: "Project_Specs_v2.pdf", size: "2.4 MB", time: "2 hrs ago" },
-    { name: "Design_System.fig", size: "15 MB", time: "Yesterday" },
-  ];
+  // Show coming soon toast for unavailable features
+  const showComingSoon = (feature) => {
+    toast.info(`${feature} coming soon!`, {
+      duration: 2000,
+    });
+  };
 
   // Helper to get display name
   const getDisplayName = () => {
@@ -85,9 +70,9 @@ const ContactInfoPanel = ({ chat, onClose }) => {
   };
 
   const actions = [
-    { icon: User, label: "Profile", onClick: () => {} },
-    { icon: BellOff, label: "Mute", onClick: () => {} },
-    { icon: Search, label: "Search", onClick: () => {} },
+    { icon: User, label: "Profile", onClick: () => showComingSoon("View profile") },
+    { icon: BellOff, label: "Mute", onClick: () => showComingSoon("Mute notifications") },
+    { icon: Search, label: "Search", onClick: () => showComingSoon("Search in chat") },
   ];
 
   // Check if current user is admin (for groups)
@@ -99,9 +84,19 @@ const ContactInfoPanel = ({ chat, onClose }) => {
     <div className="h-full flex flex-col bg-card">
       {/* Header */}
       <div className="h-16 px-4 flex items-center justify-between border-b border-border">
-        <h3 className="font-semibold text-foreground">
-          {chat.isGroup ? "Group Info" : "Contact Info"}
-        </h3>
+        <div className="flex items-center gap-2">
+          {isMobile && onBack && (
+            <button
+              onClick={onBack}
+              className="p-2 rounded-lg hover:bg-muted/50 transition-colors"
+            >
+              <ArrowLeft className="h-5 w-5 text-muted-foreground" />
+            </button>
+          )}
+          <h3 className="font-semibold text-foreground">
+            {chat.isGroup ? "Group Info" : "Contact Info"}
+          </h3>
+        </div>
         <button
           onClick={onClose}
           className="p-2 rounded-lg hover:bg-muted/50 transition-colors"
@@ -162,7 +157,10 @@ const ContactInfoPanel = ({ chat, onClose }) => {
                 {chat.participants.length} Members
               </h4>
               {isCurrentUserAdmin && (
-                <button className="text-xs text-primary hover:underline flex items-center gap-1">
+                <button
+                  onClick={() => showComingSoon("Add members")}
+                  className="text-xs text-primary hover:underline flex items-center gap-1"
+                >
                   <UserPlus className="h-3 w-3" />
                   Add
                 </button>
@@ -208,79 +206,21 @@ const ContactInfoPanel = ({ chat, onClose }) => {
           </div>
         )}
 
-        {/* Shared Media */}
-        <div className="p-4 border-b border-border">
-          <div className="flex items-center justify-between mb-3">
-            <h4 className="font-medium text-foreground">Shared Media</h4>
-            <button className="text-xs text-primary hover:underline">
-              View All
-            </button>
-          </div>
-
-          <Swiper
-            modules={[Navigation, Pagination]}
-            spaceBetween={8}
-            slidesPerView={2.5}
-            className="!-mx-1 !px-1"
-          >
-            {sharedMedia.map((src, index) => (
-              <SwiperSlide key={index}>
-                <motion.div
-                  whileHover={{ scale: 1.05 }}
-                  className="relative aspect-square rounded-xl overflow-hidden cursor-pointer"
-                >
-                  <img
-                    src={src}
-                    alt={`Shared ${index + 1}`}
-                    className="w-full h-full object-cover"
-                  />
-                  {index === sharedMedia.length - 1 && sharedMedia.length > 3 && (
-                    <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
-                      <span className="text-white font-medium">+12</span>
-                    </div>
-                  )}
-                </motion.div>
-              </SwiperSlide>
-            ))}
-          </Swiper>
-        </div>
-
-        {/* Shared Files */}
-        <div className="p-4 border-b border-border">
-          <h4 className="font-medium text-foreground mb-3">Files & Docs</h4>
-          <div className="space-y-2">
-            {sharedFiles.map((file, index) => (
-              <motion.div
-                key={index}
-                whileHover={{ x: 4 }}
-                className="flex items-center gap-3 p-3 rounded-xl hover:bg-muted/50 transition-colors cursor-pointer"
-              >
-                <div className="p-2 rounded-lg bg-primary/10">
-                  <FileText className="h-5 w-5 text-primary" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-foreground truncate">
-                    {file.name}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {file.size} - {file.time}
-                  </p>
-                </div>
-                <ChevronRight className="h-4 w-4 text-muted-foreground" />
-              </motion.div>
-            ))}
-          </div>
-        </div>
-
         {/* Danger Zone */}
         <div className="p-4 space-y-2">
           {chat.isGroup ? (
-            <button className="w-full flex items-center justify-center gap-2 p-3 rounded-xl text-destructive hover:bg-destructive/10 transition-colors">
+            <button
+              onClick={() => showComingSoon("Leave group")}
+              className="w-full flex items-center justify-center gap-2 p-3 rounded-xl text-destructive hover:bg-destructive/10 transition-colors"
+            >
               <LogOut className="h-5 w-5" />
               <span className="font-medium">Leave Group</span>
             </button>
           ) : (
-            <button className="w-full flex items-center justify-center gap-2 p-3 rounded-xl text-destructive hover:bg-destructive/10 transition-colors">
+            <button
+              onClick={() => showComingSoon("Block contact")}
+              className="w-full flex items-center justify-center gap-2 p-3 rounded-xl text-destructive hover:bg-destructive/10 transition-colors"
+            >
               <Ban className="h-5 w-5" />
               <span className="font-medium">Block Contact</span>
             </button>

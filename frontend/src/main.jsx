@@ -2,8 +2,10 @@ import { StrictMode, Suspense, lazy } from "react";
 import { createRoot } from "react-dom/client";
 import { Provider } from "react-redux";
 import { RouterProvider, createBrowserRouter } from "react-router";
+import { Toaster } from "sonner";
 import store from "./store/store";
 import "./index.css";
+import PageLoader from "./components/shared/PageLoader";
 
 // Lazy load pages for code splitting
 const LandingPage = lazy(() => import("./pages/LandingPage"));
@@ -12,16 +14,6 @@ const SignupPage = lazy(() => import("./pages/SignupPage"));
 const VerifyOtpPage = lazy(() => import("./pages/VerifyOtpPage"));
 const ForgotPasswordPage = lazy(() => import("./pages/ForgotPasswordPage"));
 const ChatPage = lazy(() => import("./pages/ChatPage"));
-
-// Loading component
-const PageLoader = () => (
-  <div className="min-h-screen flex items-center justify-center bg-background">
-    <div className="flex flex-col items-center gap-4">
-      <div className="h-12 w-12 rounded-full border-4 border-primary border-t-transparent animate-spin" />
-      <p className="text-muted-foreground text-sm">Loading...</p>
-    </div>
-  </div>
-);
 
 // Error Boundary fallback
 const ErrorFallback = () => (
@@ -113,6 +105,14 @@ createRoot(document.getElementById("root")).render(
   <StrictMode>
     <Provider store={store}>
       <RouterProvider router={router} />
+      <Toaster
+        position="top-center"
+        richColors
+        closeButton
+        toastOptions={{
+          duration: 3000,
+        }}
+      />
     </Provider>
   </StrictMode>
 );

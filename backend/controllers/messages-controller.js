@@ -6,6 +6,14 @@ import asyncHandler from "../utils/asyncHandler.js";
 import { Types } from "mongoose";
 import { MESSAGE_PARTICIPANT_PROJECTION } from "../constants/projections.js";
 
+// Helper to emit socket events to a room
+const emitSocketEvent = (req, room, event, data) => {
+  const io = req.app.get("io");
+  if (io) {
+    io.to(room).emit(event, data);
+  }
+};
+
 // Check if user is participant of chat
 const ensureChatParticipant = async (chatId, userId) => {
   const chat = await Chat.findById(chatId).lean();
@@ -72,9 +80,21 @@ const sendMessage = asyncHandler(async (req, res) => {
     .populate("sender", `${MESSAGE_PARTICIPANT_PROJECTION}`)
     .lean();
 
+  // Emit socket event for real-time message delivery
+  emitSocketEvent(req, `chat:${chatId}`, "message:new", {
+    chatId,
+    message: populatedMessage,
+  });
+
+  // Emit chat update event for sidebar
+  emitSocketEvent(req, `chat:${chatId}`, "chat:update", {
+    chatId,
+    lastMessage: populatedMessage,
+  });
+
   return res
     .status(201)
-    .json(new ApiResponse(201, populatedMessage, "Message sent successfully"));
+    .json(new ApiResponse(201, { message: populatedMessage }, "Message sent successfully"));
 });
 
 //------------------------------------------------------------------------
@@ -181,6 +201,15 @@ const markMessagesRead = asyncHandler(async (req, res) => {
   const result = await Message.updateMany(filter, {
     $addToSet: { readBy: userId },
   });
+
+  // Emit socket event for read receipts
+  if (result.modifiedCount > 0) {
+    emitSocketEvent(req, `chat:${chatId}`, "messages:read", {
+      chatId,
+      readBy: userId,
+      count: result.modifiedCount,
+    });
+  }
 
   return res.status(200).json(
     new ApiResponse(

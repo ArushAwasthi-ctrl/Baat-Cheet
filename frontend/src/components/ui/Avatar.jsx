@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { cn, getInitials } from "@/lib/utils";
 
 const sizeClasses = {
@@ -10,21 +11,40 @@ const sizeClasses = {
 };
 
 const Avatar = ({ src, name, size = "md", className, onClick }) => {
+  const [imageLoaded, setImageLoaded] = useState(false);
+  const [imageError, setImageError] = useState(false);
   const initials = getInitials(name);
 
-  if (src) {
+  if (src && !imageError) {
     return (
-      <img
-        src={src}
-        alt={name || "Avatar"}
+      <div
         onClick={onClick}
         className={cn(
-          "rounded-full object-cover bg-muted",
+          "relative rounded-full bg-primary/10 flex items-center justify-center overflow-hidden",
           sizeClasses[size],
           onClick && "cursor-pointer",
           className
         )}
-      />
+      >
+        {/* Fallback initials shown while loading */}
+        {!imageLoaded && (
+          <span className="absolute inset-0 flex items-center justify-center text-primary font-medium">
+            {initials}
+          </span>
+        )}
+        <img
+          src={src}
+          alt={name || "Avatar"}
+          loading="lazy"
+          decoding="async"
+          onLoad={() => setImageLoaded(true)}
+          onError={() => setImageError(true)}
+          className={cn(
+            "rounded-full object-cover w-full h-full transition-opacity duration-300",
+            imageLoaded ? "opacity-100" : "opacity-0"
+          )}
+        />
+      </div>
     );
   }
 
@@ -32,7 +52,7 @@ const Avatar = ({ src, name, size = "md", className, onClick }) => {
     <div
       onClick={onClick}
       className={cn(
-        "rounded-full bg-primary/10 text-primary font-medium flex items-center justify-center",
+        "rounded-full bg-primary/10 text-primary font-medium flex items-center justify-center shrink-0",
         sizeClasses[size],
         onClick && "cursor-pointer",
         className

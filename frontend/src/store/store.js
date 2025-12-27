@@ -4,7 +4,7 @@ import uiReducer from "./slices/uiSlice";
 import chatReducer from "./slices/chatSlice";
 import messageReducer from "./slices/messageSlice";
 
-const store = configureStore({
+export const store = configureStore({
   reducer: {
     auth: authReducer,
     ui: uiReducer,

@@ -1,37 +1,45 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { useSelector, useDispatch } from "react-redux";
 import ChatLayout from "@/layouts/ChatLayout";
 import { getCurrentUser } from "@/store/slices/authSlice";
+import PageLoader from "@/components/shared/PageLoader";
 
 const ChatPage = () => {
   const navigate = useNavigate();
   const dispatch = useDispatch();
   const { isAuthenticated, isLoading, user } = useSelector((state) => state.auth);
+  const [hasCheckedAuth, setHasCheckedAuth] = useState(false);
 
   useEffect(() => {
-    // Check auth on mount
-    if (!user && !isLoading) {
-      dispatch(getCurrentUser());
+    // Check auth on mount - always try to get current user on page load
+    const checkAuth = async () => {
+      try {
+        await dispatch(getCurrentUser()).unwrap();
+      } catch (error) {
+        // User not authenticated
+      } finally {
+        setHasCheckedAuth(true);
+      }
+    };
+
+    if (!user) {
+      checkAuth();
+    } else {
+      setHasCheckedAuth(true);
     }
-  }, [dispatch, user, isLoading]);
+  }, [dispatch, user]);
 
   useEffect(() => {
-    // Redirect to login if not authenticated after loading
-    if (!isLoading && !isAuthenticated) {
+    // Only redirect after we've actually checked auth
+    if (hasCheckedAuth && !isAuthenticated) {
       navigate("/login");
     }
-  }, [isAuthenticated, isLoading, navigate]);
+  }, [hasCheckedAuth, isAuthenticated, navigate]);
 
-  if (isLoading) {
-    return (
-      <div className="h-screen w-screen flex items-center justify-center bg-background">
-        <div className="flex flex-col items-center gap-4">
-          <div className="h-12 w-12 rounded-full border-4 border-primary border-t-transparent animate-spin" />
-          <p className="text-muted-foreground text-sm">Loading...</p>
-        </div>
-      </div>
-    );
+  // Show loading while checking auth
+  if (!hasCheckedAuth || isLoading) {
+    return <PageLoader />;
   }
 
   if (!isAuthenticated) {
