@@ -35,7 +35,9 @@ const NewChatModal = () => {
         setIsSearching(true);
         setError(null);
         const response = await userService.searchUsers(query);
-        setUsers(response.data?.users || []);
+        // Filter out current user from search results
+        const allUsers = response.data?.users || [];
+        setUsers(allUsers.filter((u) => u._id !== user?._id));
       } catch (err) {
         console.error("Search error:", err);
         setError("Failed to search users");

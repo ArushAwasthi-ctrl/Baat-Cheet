@@ -165,6 +165,7 @@ const ChatArea = ({ chat, onToggleInfo, onBack, isMobile = false }) => {
       }
     } catch (error) {
       console.error("Failed to send message:", error);
+      toast.error(error || "Failed to send message. Please try again.");
       // Restore message on error
       setMessage(content);
     }

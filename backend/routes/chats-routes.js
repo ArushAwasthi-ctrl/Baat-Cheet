@@ -8,6 +8,8 @@ import {
   addMembers,
   removeMembers,
   promoteToAdmin,
+  leaveGroup,
+  deleteChat,
 } from "../controllers/chats-controller.js";
 import authValidator from "../middlewares/auth-middleware.js";
 import validate from "../middlewares/validator-middleware.js";
@@ -80,6 +82,22 @@ ChatRouter.post(
   promoteToAdminValidator(),
   validate,
   promoteToAdmin,
+);
+
+ChatRouter.post(
+  "/:chatId/leave",
+  authValidator,
+  getChatByIdValidator(),
+  validate,
+  leaveGroup,
+);
+
+ChatRouter.delete(
+  "/:chatId",
+  authValidator,
+  getChatByIdValidator(),
+  validate,
+  deleteChat,
 );
 
 export default ChatRouter;

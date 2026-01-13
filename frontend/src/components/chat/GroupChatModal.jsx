@@ -18,6 +18,7 @@ import userService from "@/services/userService";
 const GroupChatModal = () => {
   const dispatch = useDispatch();
   const { activeModal } = useSelector((state) => state.ui);
+  const { user: currentUser } = useSelector((state) => state.auth);
   const { isLoading: isCreatingChat } = useSelector((state) => state.chats);
 
   const [step, setStep] = useState(1); // 1: Select members, 2: Group details
@@ -44,7 +45,9 @@ const GroupChatModal = () => {
         setIsSearching(true);
         setError(null);
         const response = await userService.searchUsers(query);
-        setUsers(response.data?.users || []);
+        // Filter out current user from search results
+        const allUsers = response.data?.users || [];
+        setUsers(allUsers.filter((u) => u._id !== currentUser?._id));
       } catch (err) {
         console.error("Search error:", err);
         setError("Failed to search users");
@@ -90,8 +93,8 @@ const GroupChatModal = () => {
   };
 
   const handleNext = () => {
-    if (selectedMembers.length < 1) {
-      setError("Please select at least one member");
+    if (selectedMembers.length < 2) {
+      setError("Please select at least 2 members for a group");
       return;
     }
     setError(null);
@@ -281,10 +284,10 @@ const GroupChatModal = () => {
               <div className="p-4 border-t border-border">
                 <button
                   onClick={handleNext}
-                  disabled={selectedMembers.length < 1}
+                  disabled={selectedMembers.length < 2}
                   className={cn(
                     "w-full py-3 rounded-xl font-medium transition-colors",
-                    selectedMembers.length >= 1
+                    selectedMembers.length >= 2
                       ? "bg-primary text-primary-foreground hover:bg-primary/90"
                       : "bg-muted text-muted-foreground cursor-not-allowed"
                   )}

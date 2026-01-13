@@ -103,6 +103,14 @@ const createorGetGroupChat = asyncHandler(async (req, res) => {
     );
   }
 
+  // Verify all participants exist in the database
+  const existingUsers = await User.find({ _id: { $in: uniqueParticipantIds } }).select("_id").lean();
+  const existingUserIds = existingUsers.map((u) => u._id.toString());
+  const nonExistentIds = uniqueParticipantIds.filter((id) => !existingUserIds.includes(id));
+  if (nonExistentIds.length > 0) {
+    throw new ApiError(404, "Some participants do not exist", false, { nonExistentIds });
+  }
+
   const finalParticipants = [
     currentId,
     ...uniqueParticipantIds.map((id) => new Types.ObjectId(id)),
@@ -299,6 +307,20 @@ const addMembers = asyncHandler(async (req, res) => {
   // normalize + dedupe
   const uniqueIds = [...new Set(memberIds.map(String))];
 
+  // Validate that all member IDs are valid ObjectIds
+  const invalidIds = uniqueIds.filter((id) => !Types.ObjectId.isValid(id));
+  if (invalidIds.length > 0) {
+    throw new ApiError(400, "Some member IDs are invalid", false, { invalidIds });
+  }
+
+  // Verify all users exist in the database
+  const existingUsers = await User.find({ _id: { $in: uniqueIds } }).select("_id").lean();
+  const existingUserIds = existingUsers.map((u) => u._id.toString());
+  const nonExistentIds = uniqueIds.filter((id) => !existingUserIds.includes(id));
+  if (nonExistentIds.length > 0) {
+    throw new ApiError(404, "Some users do not exist", false, { nonExistentIds });
+  }
+
   // filter out already-participants
   const existing = chat.participants.map((id) => id.toString());
   const newIds = uniqueIds.filter((id) => !existing.includes(id));
@@ -373,6 +395,12 @@ const removeMembers = asyncHandler(async (req, res) => {
 
   // normalize + dedupe requested ids
   const uniqueIds = [...new Set(memberIds.map(String))];
+
+  // Prevent admin from removing themselves (should use leaveGroup instead)
+  const currentUserIdStr = currentUserId.toString();
+  if (uniqueIds.includes(currentUserIdStr)) {
+    throw new ApiError(400, "You cannot remove yourself. Use 'Leave Group' instead.");
+  }
 
   // ensure all requested ids are actually participants
   const participantIds = chat.participants.map((id) => id.toString());
@@ -479,6 +507,128 @@ const promoteToAdmin = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, { chat: updatedChat }, "Member promoted to admin successfully"));
 });
 
+// ------------------------------------------------------------------------
+// ------------------------ Leave Group Chat ------------------------------
+// ------------------------------------------------------------------------
+const leaveGroup = asyncHandler(async (req, res) => {
+  const currentUserId = req.user._id;
+  const { chatId } = req.params;
+
+  if (!Types.ObjectId.isValid(chatId)) {
+    throw new ApiError(400, "Chat Id is invalid");
+  }
+
+  const chat = await Chat.findById(chatId);
+  if (!chat) throw new ApiError(404, "Chat not found");
+  if (chat.type !== "group") throw new ApiError(400, "Not a group chat");
+
+  const currentUserIdStr = currentUserId.toString();
+  const isParticipant = chat.participants.some(
+    (id) => id.toString() === currentUserIdStr,
+  );
+  if (!isParticipant) {
+    throw new ApiError(400, "You are not a member of this group");
+  }
+
+  const isAdmin = chat.admins.some((id) => id.toString() === currentUserIdStr);
+  const isOnlyAdmin = isAdmin && chat.admins.length === 1;
+  const hasOtherParticipants = chat.participants.length > 1;
+
+  // If user is the only admin and there are other participants,
+  // they must promote someone else first
+  if (isOnlyAdmin && hasOtherParticipants) {
+    throw new ApiError(
+      400,
+      "You are the only admin. Please promote another member to admin before leaving.",
+    );
+  }
+
+  // Remove user from participants and admins
+  const updatedChat = await Chat.findByIdAndUpdate(
+    chatId,
+    {
+      $pull: {
+        participants: currentUserId,
+        admins: currentUserId,
+      },
+    },
+    { new: true },
+  )
+    .populate("participants", CHAT_PARTICIPANT_PROJECTION)
+    .populate("admins", "_id username avatar")
+    .lean();
+
+  // If no participants left, delete the chat
+  if (updatedChat.participants.length === 0) {
+    await Chat.findByIdAndDelete(chatId);
+    return res
+      .status(200)
+      .json(new ApiResponse(200, null, "You left the group and it was deleted"));
+  }
+
+  // Emit socket event to remaining participants
+  emitSocketEvent(req, `chat:${chatId}`, "group:updated", {
+    chatId,
+    chat: updatedChat,
+    action: "memberLeft",
+    leftMember: currentUserIdStr,
+  });
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, { chat: updatedChat }, "You left the group successfully"));
+});
+
+// ------------------------------------------------------------------------
+// ------------------------ Delete Chat -----------------------------------
+// ------------------------------------------------------------------------
+const deleteChat = asyncHandler(async (req, res) => {
+  const currentUserId = req.user._id;
+  const { chatId } = req.params;
+
+  if (!Types.ObjectId.isValid(chatId)) {
+    throw new ApiError(400, "Chat Id is invalid");
+  }
+
+  const chat = await Chat.findById(chatId);
+  if (!chat) throw new ApiError(404, "Chat not found");
+
+  // Verify user is a participant
+  const currentUserIdStr = currentUserId.toString();
+  const isParticipant = chat.participants.some(
+    (id) => id.toString() === currentUserIdStr,
+  );
+  if (!isParticipant) {
+    throw new ApiError(403, "You are not a participant of this chat");
+  }
+
+  // For group chats, only admins can delete
+  if (chat.type === "group") {
+    const isAdmin = chat.admins.some(
+      (id) => id.toString() === currentUserIdStr,
+    );
+    if (!isAdmin) {
+      throw new ApiError(403, "Only admins can delete a group chat");
+    }
+  }
+
+  // Delete all messages in this chat
+  const Message = (await import("../models/Messages.js")).default;
+  await Message.deleteMany({ chat: chatId });
+
+  // Delete the chat
+  await Chat.findByIdAndDelete(chatId);
+
+  // Emit socket event to all participants
+  chat.participants.forEach((participantId) => {
+    emitToUser(req, participantId.toString(), "chat:removed", { chatId });
+  });
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, null, "Chat deleted successfully"));
+});
+
 // Export controllers
 export {
   createOrGetDirectChat,
@@ -489,4 +639,6 @@ export {
   addMembers,
   removeMembers,
   promoteToAdmin,
+  leaveGroup,
+  deleteChat,
 };

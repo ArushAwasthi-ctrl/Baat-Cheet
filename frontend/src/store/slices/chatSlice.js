@@ -123,6 +123,34 @@ export const promoteToAdmin = createAsyncThunk(
   }
 );
 
+export const leaveGroup = createAsyncThunk(
+  "chats/leaveGroup",
+  async (chatId, { rejectWithValue }) => {
+    try {
+      const response = await chatService.leaveGroup(chatId);
+      return { chatId, ...response.data };
+    } catch (error) {
+      return rejectWithValue(
+        getErrorMessage(error, "Failed to leave group")
+      );
+    }
+  }
+);
+
+export const deleteChat = createAsyncThunk(
+  "chats/deleteChat",
+  async (chatId, { rejectWithValue }) => {
+    try {
+      await chatService.deleteChat(chatId);
+      return { chatId };
+    } catch (error) {
+      return rejectWithValue(
+        getErrorMessage(error, "Failed to delete chat")
+      );
+    }
+  }
+);
+
 const initialState = {
   chats: [],
   selectedChat: null,
@@ -327,6 +355,22 @@ const chatSlice = createSlice({
         }
         if (state.selectedChat?._id === updatedChat._id) {
           state.selectedChat = updatedChat;
+        }
+      })
+      // Leave Group
+      .addCase(leaveGroup.fulfilled, (state, action) => {
+        const { chatId } = action.payload;
+        state.chats = state.chats.filter((c) => c._id !== chatId);
+        if (state.selectedChat?._id === chatId) {
+          state.selectedChat = null;
+        }
+      })
+      // Delete Chat
+      .addCase(deleteChat.fulfilled, (state, action) => {
+        const { chatId } = action.payload;
+        state.chats = state.chats.filter((c) => c._id !== chatId);
+        if (state.selectedChat?._id === chatId) {
+          state.selectedChat = null;
         }
       });
   },

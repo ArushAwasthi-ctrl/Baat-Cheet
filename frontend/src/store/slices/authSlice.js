@@ -148,7 +148,9 @@ const authSlice = createSlice({
       .addCase(login.fulfilled, (state, action) => {
         state.isLoading = false;
         // Backend returns { data: { user: {...} } }
-        state.user = action.payload.data?.user || action.payload.data;
+        const userData = action.payload.data?.user || action.payload.data;
+        // Normalize user ID to ensure _id is always present
+        state.user = userData ? { ...userData, _id: userData._id || userData.id } : null;
         state.isAuthenticated = true;
         state.error = null;
       })
@@ -181,7 +183,9 @@ const authSlice = createSlice({
       .addCase(verifyOtp.fulfilled, (state, action) => {
         state.isLoading = false;
         // Backend returns { data: { user: {...} } }
-        state.user = action.payload.data?.user || action.payload.data;
+        const userData = action.payload.data?.user || action.payload.data;
+        // Normalize user ID to ensure _id is always present
+        state.user = userData ? { ...userData, _id: userData._id || userData.id } : null;
         state.isAuthenticated = true;
         state.registrationEmail = null;
         state.error = null;
@@ -257,7 +261,9 @@ const authSlice = createSlice({
       .addCase(getCurrentUser.fulfilled, (state, action) => {
         state.isLoading = false;
         // Backend returns { data: { user: {...} } } or { data: {...} }
-        state.user = action.payload.data?.user || action.payload.data;
+        const userData = action.payload.data?.user || action.payload.data;
+        // Normalize user ID to ensure _id is always present
+        state.user = userData ? { ...userData, _id: userData._id || userData.id } : null;
         state.isAuthenticated = true;
         state.error = null;
       })

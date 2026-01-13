@@ -30,8 +30,12 @@ const allowedOrigins = (process.env.CORS_ORIGINS || "http://localhost:3000")
 app.use(
   cors({
     origin: (origin, cb) => {
+      // Allow requests with no origin (mobile apps, curl, etc.)
       if (!origin) return cb(null, true);
-      return cb(null, allowedOrigins.includes(origin));
+      if (allowedOrigins.includes(origin)) {
+        return cb(null, true);
+      }
+      return cb(new Error("Not allowed by CORS"));
     },
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
     credentials: true,

@@ -1,5 +1,6 @@
+import { useState } from "react";
 import { motion } from "framer-motion";
-import { useSelector } from "react-redux";
+import { useSelector, useDispatch } from "react-redux";
 import {
   X,
   User,
@@ -12,13 +13,17 @@ import {
   UserPlus,
   Crown,
   ArrowLeft,
+  Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import Avatar from "@/components/ui/Avatar";
 import { toast } from "sonner";
+import { leaveGroup } from "@/store/slices/chatSlice";
 
 const ContactInfoPanel = ({ chat, onClose, onBack, isMobile = false }) => {
+  const dispatch = useDispatch();
   const { user } = useSelector((state) => state.auth);
+  const [isLeaving, setIsLeaving] = useState(false);
 
   // Show coming soon toast for unavailable features
   const showComingSoon = (feature) => {
@@ -210,11 +215,44 @@ const ContactInfoPanel = ({ chat, onClose, onBack, isMobile = false }) => {
         <div className="p-4 space-y-2">
           {chat.isGroup ? (
             <button
-              onClick={() => showComingSoon("Leave group")}
-              className="w-full flex items-center justify-center gap-2 p-3 rounded-xl text-destructive hover:bg-destructive/10 transition-colors"
+              onClick={async () => {
+                if (isLeaving) return;
+
+                // Check if user is the only admin
+                const isOnlyAdmin =
+                  isCurrentUserAdmin &&
+                  chat.admins?.length === 1 &&
+                  chat.participants?.length > 1;
+
+                if (isOnlyAdmin) {
+                  toast.error("You are the only admin. Please promote another member to admin before leaving.");
+                  return;
+                }
+
+                if (!window.confirm("Are you sure you want to leave this group?")) {
+                  return;
+                }
+
+                setIsLeaving(true);
+                try {
+                  await dispatch(leaveGroup(chat._id)).unwrap();
+                  toast.success("You have left the group");
+                  onClose();
+                } catch (error) {
+                  toast.error(error || "Failed to leave group");
+                } finally {
+                  setIsLeaving(false);
+                }
+              }}
+              disabled={isLeaving}
+              className="w-full flex items-center justify-center gap-2 p-3 rounded-xl text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-50"
             >
-              <LogOut className="h-5 w-5" />
-              <span className="font-medium">Leave Group</span>
+              {isLeaving ? (
+                <Loader2 className="h-5 w-5 animate-spin" />
+              ) : (
+                <LogOut className="h-5 w-5" />
+              )}
+              <span className="font-medium">{isLeaving ? "Leaving..." : "Leave Group"}</span>
             </button>
           ) : (
             <button

@@ -65,6 +65,18 @@ const chatService = {
     });
     return response.data;
   },
+
+  // Leave a group chat
+  leaveGroup: async (chatId) => {
+    const response = await api.post(`/api/chats/${chatId}/leave`);
+    return response.data;
+  },
+
+  // Delete a chat
+  deleteChat: async (chatId) => {
+    const response = await api.delete(`/api/chats/${chatId}`);
+    return response.data;
+  },
 };
 
 export default chatService;

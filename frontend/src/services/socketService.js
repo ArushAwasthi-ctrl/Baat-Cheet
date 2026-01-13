@@ -9,6 +9,7 @@ import {
   removeChat,
   updateChat,
 } from "../store/slices/chatSlice";
+import authService from "./authService";
 
 class SocketService {
   constructor() {
@@ -16,6 +17,7 @@ class SocketService {
     this.isConnected = false;
     this.reconnectAttempts = 0;
     this.maxReconnectAttempts = 5;
+    this.isRefreshingToken = false;
   }
 
   // Initialize socket connection
@@ -39,6 +41,25 @@ class SocketService {
     return this.socket;
   }
 
+  // Handle token refresh and reconnection
+  async handleTokenExpiry() {
+    if (this.isRefreshingToken) return;
+
+    this.isRefreshingToken = true;
+    try {
+      await authService.refreshToken();
+      // Reconnect socket after token refresh
+      if (this.socket) {
+        this.socket.disconnect();
+        this.socket.connect();
+      }
+    } catch (error) {
+      console.error("Failed to refresh token for socket:", error);
+    } finally {
+      this.isRefreshingToken = false;
+    }
+  }
+
   // Setup all event listeners
   setupEventListeners() {
     if (!this.socket) return;
@@ -58,6 +79,11 @@ class SocketService {
     this.socket.on("connect_error", (error) => {
       console.error("Socket connection error:", error.message);
       this.reconnectAttempts++;
+
+      // If token expired, try to refresh and reconnect
+      if (error.message === "Token expired" || error.message === "Authentication failed") {
+        this.handleTokenExpiry();
+      }
     });
 
     // Message events

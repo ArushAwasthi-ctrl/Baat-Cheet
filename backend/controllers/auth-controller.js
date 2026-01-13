@@ -13,10 +13,11 @@ import emailQueue from "../queues/email.queue.js";
 const isProd = process.env.NODE_ENV === "production";
 
 // Access Token cookie (short-lived)
+// Use sameSite: "none" in production for cross-origin cookie support
 const accessCookieOptions = {
   httpOnly: true,
   secure: isProd,
-  sameSite: "strict",
+  sameSite: isProd ? "none" : "lax",
   maxAge: 15 * 60 * 1000, // 15 minutes
 };
 
@@ -24,7 +25,7 @@ const accessCookieOptions = {
 const refreshCookieOptions = {
   httpOnly: true,
   secure: isProd,
-  sameSite: "strict",
+  sameSite: isProd ? "none" : "lax",
   maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
 };
 
@@ -145,9 +146,12 @@ const verifyOtp = asyncHandler(async (req, res) => {
       201,
       {
         user: {
+          _id: newUser._id,
           id: newUser._id,
           username: newUser.username,
           email: newUser.email,
+          avatar: newUser.avatar,
+          bio: newUser.bio,
           isVerified: newUser.isVerified,
         },
       },
@@ -196,15 +200,8 @@ const resendEmailVerificationOTP = asyncHandler(async (req, res) => {
 const loginUser = asyncHandler(async (req, res) => {
   const { email, password } = req.body;
 
-  //  Check user existence
-  const user = await User.findOneAndUpdate(
-    { email },
-    {
-      $set: {
-        status: "online",
-      },
-    },
-  );
+  //  Check user existence (without updating status yet)
+  const user = await User.findOne({ email });
   if (!user) throw new ApiError(404, "User not found");
 
   //  Verify account
@@ -213,6 +210,9 @@ const loginUser = asyncHandler(async (req, res) => {
   //  Validate password
   const isValidPassword = await user.validatePassword(password);
   if (!isValidPassword) throw new ApiError(400, "Incorrect password");
+
+  // Update status to online only after successful authentication
+  await User.findByIdAndUpdate(user._id, { status: "online" });
 
   //  Generate tokens
   const accessToken = user.createAccessToken();
@@ -231,17 +231,18 @@ const loginUser = asyncHandler(async (req, res) => {
   res.cookie("accessToken", accessToken, accessCookieOptions);
   res.cookie("refreshToken", refreshToken, refreshCookieOptions);
 
-  // User is online when logged in
-
   // Success response
   return res.status(200).json(
     new ApiResponse(
       200,
       {
         user: {
+          _id: user._id,
           id: user._id,
           username: user.username,
           email: user.email,
+          avatar: user.avatar,
+          bio: user.bio,
           isVerified: user.isVerified,
         },
       },
