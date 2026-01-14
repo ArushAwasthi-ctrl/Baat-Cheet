@@ -25,7 +25,7 @@ const chatService = {
   },
 
   // Create a group chat
-  createGroupChat: async ({ name, description, participants }) => {
+  createGroupChat: async ({ name, participants }) => {
     const response = await api.post("/api/chats/group", {
       name,
       participants,

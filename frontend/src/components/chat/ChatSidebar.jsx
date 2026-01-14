@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+// eslint-disable-next-line no-unused-vars
 import { motion } from "framer-motion";
 import { useSelector, useDispatch } from "react-redux";
 import {
@@ -420,10 +421,6 @@ const ChatSidebar = ({ selectedChat, onSelectChat }) => {
 
   const handleNewChat = () => {
     dispatch(openModal({ modal: "newChat" }));
-  };
-
-  const handleNewGroup = () => {
-    dispatch(openModal({ modal: "newGroup" }));
   };
 
   const handleLogout = () => {

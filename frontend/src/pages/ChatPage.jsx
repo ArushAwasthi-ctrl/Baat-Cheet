@@ -16,7 +16,7 @@ const ChatPage = () => {
     const checkAuth = async () => {
       try {
         await dispatch(getCurrentUser()).unwrap();
-      } catch (error) {
+      } catch {
         // User not authenticated
       } finally {
         setHasCheckedAuth(true);

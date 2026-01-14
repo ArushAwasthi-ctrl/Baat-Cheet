@@ -1,3 +1,4 @@
+// eslint-disable-next-line no-unused-vars
 import { motion } from "framer-motion";
 import { MessageCircle, Sparkles, Coffee, Briefcase, Hand } from "lucide-react";
 

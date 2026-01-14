@@ -1,4 +1,5 @@
 import { forwardRef } from "react";
+// eslint-disable-next-line no-unused-vars
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { Loader2 } from "lucide-react";
@@ -28,7 +29,6 @@ const Button = forwardRef(
       isLoading = false,
       disabled,
       children,
-      asChild = false,
       ...props
     },
     ref

@@ -42,7 +42,7 @@ export const useSocket = () => {
     isConnected,
     socket: socketService.socket,
     joinChat: socketService.joinChat.bind(socketService),
-    leaveChat: socketService.leaveChat.bind(socketService),
+    // leaveChat: socketService.leaveChat.bind(socketService), // Unused - commented out
     startTyping: socketService.startTyping.bind(socketService),
     stopTyping: socketService.stopTyping.bind(socketService),
     markAsRead: socketService.markAsRead.bind(socketService),

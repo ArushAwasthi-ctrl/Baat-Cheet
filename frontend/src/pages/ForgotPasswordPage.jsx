@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { useDispatch, useSelector } from "react-redux";
-import { motion, AnimatePresence } from "framer-motion";
+import { AnimatePresence } from "framer-motion";
 import { useForm } from "react-hook-form";
-import { Mail, Lock, AlertCircle, ArrowLeft, Check, KeyRound } from "lucide-react";
+import { Mail, Lock, AlertCircle, ArrowLeft, Check } from "lucide-react";
 import AuthLayout from "@/layouts/AuthLayout";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -17,7 +17,7 @@ const OTP_LENGTH = 6;
 const ForgotPasswordPage = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
-  const { isLoading, error, resetEmail } = useSelector((state) => state.auth);
+  const { isLoading, error } = useSelector((state) => state.auth);
   const [step, setStep] = useState(1); // 1: Email, 2: OTP + New Password
   const [email, setEmail] = useState("");
   const [otp, setOtp] = useState(new Array(OTP_LENGTH).fill(""));

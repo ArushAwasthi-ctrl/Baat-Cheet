@@ -1,6 +1,5 @@
 import { Link, useNavigate } from "react-router";
 import { useDispatch, useSelector } from "react-redux";
-import { motion } from "framer-motion";
 import { useForm } from "react-hook-form";
 import { Mail, Lock, AlertCircle } from "lucide-react";
 import AuthLayout from "@/layouts/AuthLayout";
@@ -50,14 +49,12 @@ const LoginPage = () => {
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
         {/* Error Alert */}
         {error && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
+          <div
             className="flex items-center gap-2 p-3 rounded-lg bg-destructive/10 text-destructive text-sm"
           >
             <AlertCircle className="h-4 w-4 shrink-0" />
             <span>{error}</span>
-          </motion.div>
+          </div>
         )}
 
         {/* Email Field */}

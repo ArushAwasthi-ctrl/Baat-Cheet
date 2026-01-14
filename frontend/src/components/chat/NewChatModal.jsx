@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { AnimatePresence } from "framer-motion";
 import { useSelector, useDispatch } from "react-redux";
 import { X, Search, Loader2, UserPlus, Users } from "lucide-react";
 import { cn, debounce } from "@/lib/utils";

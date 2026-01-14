@@ -5,7 +5,6 @@ import {
   updateChatLastMessage,
   incrementUnreadCount,
   addChat,
-  setSelectedChat,
   removeChat,
   updateChat,
 } from "../store/slices/chatSlice";
@@ -16,8 +15,27 @@ class SocketService {
     this.socket = null;
     this.isConnected = false;
     this.reconnectAttempts = 0;
-    this.maxReconnectAttempts = 5;
+    this.maxReconnectAttempts = 10;
     this.isRefreshingToken = false;
+    this.connectionListeners = new Set();
+  }
+
+  // Subscribe to connection state changes
+  onConnectionChange(callback) {
+    this.connectionListeners.add(callback);
+    // Immediately call with current state
+    callback(this.isConnected);
+    return () => this.connectionListeners.delete(callback);
+  }
+
+  // Broadcast connection state changes
+  broadcastConnectionState(connected) {
+    this.isConnected = connected;
+    this.connectionListeners.forEach((cb) => cb(connected));
+    // Also dispatch custom event for components
+    window.dispatchEvent(
+      new CustomEvent("socket:connection-change", { detail: { connected } })
+    );
   }
 
   // Initialize socket connection
@@ -33,8 +51,9 @@ class SocketService {
       transports: ["websocket", "polling"],
       reconnection: true,
       reconnectionDelay: 1000,
-      reconnectionDelayMax: 5000,
+      reconnectionDelayMax: 10000,
       reconnectionAttempts: this.maxReconnectAttempts,
+      timeout: 20000,
     });
 
     this.setupEventListeners();
@@ -67,23 +86,39 @@ class SocketService {
     // Connection events
     this.socket.on("connect", () => {
       console.log("Socket connected:", this.socket.id);
-      this.isConnected = true;
+      this.broadcastConnectionState(true);
       this.reconnectAttempts = 0;
     });
 
     this.socket.on("disconnect", (reason) => {
       console.log("Socket disconnected:", reason);
-      this.isConnected = false;
+      this.broadcastConnectionState(false);
+
+      // If server closed connection, attempt reconnect
+      if (reason === "io server disconnect") {
+        setTimeout(() => this.socket?.connect(), 1000);
+      }
     });
 
     this.socket.on("connect_error", (error) => {
       console.error("Socket connection error:", error.message);
       this.reconnectAttempts++;
+      this.broadcastConnectionState(false);
 
       // If token expired, try to refresh and reconnect
       if (error.message === "Token expired" || error.message === "Authentication failed") {
         this.handleTokenExpiry();
       }
+    });
+
+    this.socket.on("reconnect", (attemptNumber) => {
+      console.log("Socket reconnected after", attemptNumber, "attempts");
+      this.broadcastConnectionState(true);
+    });
+
+    this.socket.on("reconnect_failed", () => {
+      console.error("Socket reconnection failed after max attempts");
+      this.broadcastConnectionState(false);
     });
 
     // Message events
@@ -145,7 +180,7 @@ class SocketService {
 
     // Read receipts
     this.socket.on("messages:read", (data) => {
-      const { chatId, readBy } = data;
+      const { chatId } = data;
       store.dispatch(updateMessageStatus({ chatId, status: "read" }));
     });
 

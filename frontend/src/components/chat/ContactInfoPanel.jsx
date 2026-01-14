@@ -1,4 +1,5 @@
 import { useState } from "react";
+// eslint-disable-next-line no-unused-vars
 import { motion } from "framer-motion";
 import { useSelector, useDispatch } from "react-redux";
 import {
@@ -15,7 +16,6 @@ import {
   ArrowLeft,
   Loader2,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
 import Avatar from "@/components/ui/Avatar";
 import { toast } from "sonner";
 import { leaveGroup } from "@/store/slices/chatSlice";

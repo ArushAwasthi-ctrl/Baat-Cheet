@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
+// eslint-disable-next-line no-unused-vars
 import { motion, AnimatePresence } from "framer-motion";
 import ChatSidebar from "@/components/chat/ChatSidebar";
 import ChatArea from "@/components/chat/ChatArea";
 import ContactInfoPanel from "@/components/chat/ContactInfoPanel";
 import NewChatModal from "@/components/chat/NewChatModal";
 import GroupChatModal from "@/components/chat/GroupChatModal";
+import ConnectionStatus from "@/components/shared/ConnectionStatus";
 import { useSelector, useDispatch } from "react-redux";
 import { toggleGroupInfo, setGroupInfoOpen } from "@/store/slices/uiSlice";
 import { fetchChats, setSelectedChat } from "@/store/slices/chatSlice";
@@ -18,7 +20,7 @@ const ChatLayout = () => {
   const [showMobileSidebar, setShowMobileSidebar] = useState(true);
 
   // Initialize socket connection
-  const { isConnected, joinChat, leaveChat } = useSocket();
+  const { isConnected, joinChat } = useSocket();
 
   // Check for mobile viewport
   useEffect(() => {
@@ -66,6 +68,7 @@ const ChatLayout = () => {
   if (isMobile) {
     return (
       <div className="h-screen w-screen flex flex-col overflow-hidden bg-background">
+        <ConnectionStatus />
         <AnimatePresence mode="wait">
           {showMobileSidebar ? (
             <motion.div
@@ -126,6 +129,7 @@ const ChatLayout = () => {
   // Desktop Layout
   return (
     <div className="h-screen w-screen flex overflow-hidden bg-background">
+      <ConnectionStatus />
       {/* Sidebar */}
       <AnimatePresence mode="wait">
         {sidebarOpen && (

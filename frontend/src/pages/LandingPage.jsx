@@ -1,3 +1,5 @@
+// motion is used throughout the file in JSX
+// eslint-disable-next-line no-unused-vars
 import { motion } from "framer-motion";
 import { Link } from "react-router";
 import { Swiper, SwiperSlide } from "swiper/react";

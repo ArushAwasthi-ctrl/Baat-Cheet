@@ -4,6 +4,8 @@ import cookieParser from "cookie-parser";
 import helmet from "helmet";
 import compression from "compression";
 import morgan from "morgan";
+// Rate limiters
+import { apiLimiter, authLimiter } from "./middlewares/rate-limiter.js";
 // Routers
 import Authrouter from "./routes/auth-routes.js";
 import UserRouter from "./routes/users-routes.js";
@@ -46,6 +48,22 @@ app.use(
 app.use(helmet());
 app.use(compression());
 app.use(morgan(process.env.NODE_ENV === "production" ? "combined" : "dev"));
+
+// Apply rate limiting in production
+if (process.env.NODE_ENV === "production") {
+  app.use("/api/", apiLimiter);
+  app.use("/api/auth/", authLimiter);
+}
+
+// Health check endpoint (for load balancers and monitoring)
+app.get("/api/health", (req, res) => {
+  res.status(200).json({
+    status: "healthy",
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    environment: process.env.NODE_ENV || "development",
+  });
+});
 
 // Routes
 app.use("/api/auth", Authrouter);

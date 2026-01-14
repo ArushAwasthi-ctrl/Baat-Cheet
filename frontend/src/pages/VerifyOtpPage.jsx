@@ -1,8 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Link, useNavigate } from "react-router";
 import { useDispatch, useSelector } from "react-redux";
-import { motion } from "framer-motion";
-import { AlertCircle, RefreshCw, CheckCircle } from "lucide-react";
+import { AlertCircle, RefreshCw } from "lucide-react";
 import AuthLayout from "@/layouts/AuthLayout";
 import { Button } from "@/components/ui/Button";
 import { verifyOtp, resendOtp, clearError } from "@/store/slices/authSlice";
@@ -169,7 +168,7 @@ const VerifyOtpPage = () => {
         {/* OTP Input Grid */}
         <div className="flex justify-center gap-3">
           {otp.map((digit, index) => (
-            <motion.input
+            <input
               key={index}
               ref={(el) => (inputRefs.current[index] = el)}
               type="text"
@@ -180,10 +179,6 @@ const VerifyOtpPage = () => {
               onKeyDown={(e) => handleKeyDown(index, e)}
               onPaste={handlePaste}
               className="w-12 h-14 text-center text-2xl font-bold rounded-lg border border-input bg-background focus:border-primary focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background outline-none transition-all"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.05 }}
-              whileFocus={{ scale: 1.05 }}
             />
           ))}
         </div>

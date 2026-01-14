@@ -10,7 +10,10 @@
     "dev:worker": "cd backend && npm run worker:email",
     "install:all": "npm install && cd backend && npm install && cd ../frontend && npm install",
     "build": "cd frontend && npm run build",
-    "start": "cd backend && npm start"
+    "start": "cd backend && npm start",
+    "start:prod": "cd backend && cross-env NODE_ENV=production npm start",
+    "start:worker": "cd backend && cross-env NODE_ENV=production npm run worker:email",
+    "lint": "cd frontend && npm run lint"
   },
   "keywords": [
     "chat",
@@ -22,6 +25,10 @@
   "author": "Arush Awasthi",
   "license": "ISC",
   "devDependencies": {
-    "concurrently": "^9.1.2"
+    "concurrently": "^9.1.2",
+    "cross-env": "^7.0.3"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }

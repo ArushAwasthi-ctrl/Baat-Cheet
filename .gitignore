@@ -5,10 +5,12 @@ node_modules/
 dist/
 build/
 
-# Environment files
+# Environment files (IMPORTANT: Never commit real .env files!)
 .env
 .env.local
 .env.*.local
+backend/.env
+frontend/.env
 
 # IDE/Editor
 .vscode/
@@ -34,3 +36,6 @@ debug/
 
 # Coverage
 coverage/
+
+# Docker volumes
+redis-data/
