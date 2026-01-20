@@ -510,13 +510,6 @@ const ChatArea = ({ chat, onToggleInfo, onBack, isMobile = false }) => {
             )}
           </motion.button>
         </div>
-        <p className="text-center text-xs text-muted-foreground mt-2">
-          Press{" "}
-          <kbd className="px-1.5 py-0.5 rounded bg-muted text-foreground">
-            Enter
-          </kbd>{" "}
-          to send
-        </p>
       </div>
     </div>
   );
