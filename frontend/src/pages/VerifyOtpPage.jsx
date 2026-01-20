@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect } from "react";
 import { Link, useNavigate } from "react-router";
 import { useDispatch, useSelector } from "react-redux";
+// eslint-disable-next-line no-unused-vars
+import { motion } from "framer-motion";
 import { AlertCircle, RefreshCw } from "lucide-react";
 import AuthLayout from "@/layouts/AuthLayout";
 import { Button } from "@/components/ui/Button";

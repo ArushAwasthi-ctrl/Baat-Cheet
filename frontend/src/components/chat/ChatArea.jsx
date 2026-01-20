@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { AnimatePresence } from "framer-motion";
+// eslint-disable-next-line no-unused-vars
+import { motion, AnimatePresence } from "framer-motion";
 import { useSelector, useDispatch } from "react-redux";
 import {
   Search,
@@ -105,7 +106,7 @@ const ChatArea = ({ chat, onToggleInfo, onBack, isMobile = false }) => {
     if (chat && inputRef.current) {
       inputRef.current.focus();
     }
-  }, [chat?._id]);
+  }, [chat]);
 
   // Handle typing indicator
   const handleTyping = useCallback(() => {
@@ -122,7 +123,7 @@ const ChatArea = ({ chat, onToggleInfo, onBack, isMobile = false }) => {
     typingTimeoutRef.current = setTimeout(() => {
       socketService.stopTyping(chat._id);
     }, 2000);
-  }, [chat?._id]);
+  }, [chat]);
 
   // Cleanup typing timeout on unmount
   useEffect(() => {

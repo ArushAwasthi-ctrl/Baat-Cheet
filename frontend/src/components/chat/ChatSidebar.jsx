@@ -409,7 +409,7 @@ const ChatSidebar = ({ selectedChat, onSelectChat }) => {
         (filter === "groups" && chat.isGroup);
       return matchesSearch && matchesFilter;
     });
-  }, [chats, searchQuery, filter, user?._id]);
+  }, [chats, searchQuery, filter, user?._id, getChatDisplayName]);
 
   const handleChatSelect = (chat) => {
     onSelectChat(chat);

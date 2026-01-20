@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { useDispatch, useSelector } from "react-redux";
-import { AnimatePresence } from "framer-motion";
+// eslint-disable-next-line no-unused-vars
+import { motion, AnimatePresence } from "framer-motion";
 import { useForm } from "react-hook-form";
 import { Mail, Lock, AlertCircle, ArrowLeft, Check } from "lucide-react";
 import AuthLayout from "@/layouts/AuthLayout";

@@ -1,10 +1,15 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 import { useEffect, useState, useCallback } from "react";
 import { useSelector } from "react-redux";
 import socketService from "../services/socketService";
 
 export const useSocket = () => {
-  const [isConnected, setIsConnected] = useState(false);
   const { isAuthenticated } = useSelector((state) => state.auth);
+
+  // Initialize state based on current socket connection status
+  const [isConnected, setIsConnected] = useState(() => {
+    return socketService.socket?.connected ?? false;
+  });
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -17,8 +22,10 @@ export const useSocket = () => {
       socket.on("connect", handleConnect);
       socket.on("disconnect", handleDisconnect);
 
-      // Set initial state
-      setIsConnected(socket.connected);
+      // Sync initial state via event handlers (avoid direct setState in effect)
+      if (socket.connected) {
+        handleConnect();
+      }
 
       return () => {
         socket.off("connect", handleConnect);

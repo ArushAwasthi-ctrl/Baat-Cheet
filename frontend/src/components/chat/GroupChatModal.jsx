@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
-import { AnimatePresence } from "framer-motion";
+// eslint-disable-next-line no-unused-vars
+import { motion, AnimatePresence } from "framer-motion";
 import { useSelector, useDispatch } from "react-redux";
 import {
   X,
