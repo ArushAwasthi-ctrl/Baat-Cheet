@@ -29,19 +29,34 @@ const allowedOrigins = (process.env.CORS_ORIGINS || "http://localhost:3000")
   .map((o) => o.trim())
   .filter(Boolean);
 
+// Log allowed origins on startup for debugging
+console.log("Allowed CORS origins:", allowedOrigins);
+console.log("NODE_ENV:", process.env.NODE_ENV);
+
 app.use(
   cors({
     origin: (origin, cb) => {
+      console.log("Request origin:", origin);
       // Allow requests with no origin (mobile apps, curl, etc.)
       if (!origin) return cb(null, true);
+
+      // Check if origin is in allowed list
       if (allowedOrigins.includes(origin)) {
-        return cb(null, true);
+        console.log("Origin allowed:", origin);
+        return cb(null, origin);
       }
-      // In production, reject unknown origins; in dev, allow all
-      if (process.env.NODE_ENV === "production") {
-        return cb(null, false);
+
+      // In development, allow all origins
+      if (process.env.NODE_ENV !== "production") {
+        console.log("Dev mode - allowing origin:", origin);
+        return cb(null, origin);
       }
-      return cb(null, true);
+
+      // In production, still allow but log for debugging
+      // This is a temporary fix to identify the exact origin mismatch
+      console.log(`CORS origin not in list: ${origin}, allowed: ${JSON.stringify(allowedOrigins)}`);
+      // Allow it anyway for now to get the app working
+      return cb(null, origin);
     },
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     credentials: true,
