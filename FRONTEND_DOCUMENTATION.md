@@ -46,7 +46,7 @@ This document covers everything you need to know about the frontend architecture
 | Technology | Version | Why We Chose It |
 |------------|---------|-----------------|
 | **React 19** | Latest | Component-based UI, Virtual DOM for performance, Large ecosystem |
-| **Vite** | 6.x | Blazing fast dev server (uses ESBuild), Hot Module Replacement (HMR), Better than Create React App |
+| **Vite** | 7.x | Blazing fast dev server (uses ESBuild), Hot Module Replacement (HMR), Better than Create React App |
 
 ### State Management
 
@@ -59,7 +59,7 @@ This document covers everything you need to know about the frontend architecture
 
 | Technology | Why |
 |------------|-----|
-| **React Router v7** | Client-side routing, Nested routes, Route protection |
+| **React Router v7.9** | Client-side routing, Nested routes, Route protection |
 
 ### Styling
 
@@ -162,7 +162,6 @@ frontend/
 │
 ├── index.html
 ├── package.json
-├── tailwind.config.js
 └── vite.config.js
 ```
 

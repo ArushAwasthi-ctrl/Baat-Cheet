@@ -1,8 +1,23 @@
 import dotenv from "dotenv";
 import { Worker } from "bullmq";
+import Redis from "ioredis";
 import { sendEmail } from "../utils/mailgen.js";
 
 dotenv.config();
+
+// Create Redis connection for BullMQ
+const getRedisConnection = () => {
+  const redisUrl = process.env.REDIS_URL;
+  if (!redisUrl) {
+    console.warn("REDIS_URL not set, using default localhost:6379");
+    return undefined;
+  }
+
+  return new Redis(redisUrl, {
+    maxRetriesPerRequest: null,
+    enableReadyCheck: false,
+  });
+};
 
 const worker = new Worker(
   "sendMail",
@@ -13,10 +28,7 @@ const worker = new Worker(
     console.log(`Email sent successfully to ${email}`);
   },
   {
-    // Use the same Redis URL as the main app; avoids BullMQ defaulting to 127.0.0.1:6379
-    connection: process.env.REDIS_URL
-      ? { url: process.env.REDIS_URL }
-      : undefined,
+    connection: getRedisConnection(),
   },
 );
 

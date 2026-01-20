@@ -1,13 +1,25 @@
 import dotenv from "dotenv";
 import { Queue } from "bullmq";
+import Redis from "ioredis";
 
 dotenv.config();
 
+// Create Redis connection for BullMQ
+const getRedisConnection = () => {
+  const redisUrl = process.env.REDIS_URL;
+  if (!redisUrl) {
+    console.warn("REDIS_URL not set, using default localhost:6379");
+    return undefined;
+  }
+
+  return new Redis(redisUrl, {
+    maxRetriesPerRequest: null,
+    enableReadyCheck: false,
+  });
+};
+
 const emailQueue = new Queue("sendMail", {
-  // Use explicit Redis URL so BullMQ does not fall back to localhost:6379
-  connection: process.env.REDIS_URL
-    ? { url: process.env.REDIS_URL }
-    : undefined,
+  connection: getRedisConnection(),
   defaultJobOptions: {
     attempts: 2,
     backoff: {
@@ -15,7 +27,7 @@ const emailQueue = new Queue("sendMail", {
       delay: 1000,
     },
     removeOnComplete: true,
-    removeOnFail: true, 
+    removeOnFail: true,
   },
 });
 

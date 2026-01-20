@@ -689,10 +689,21 @@ Client receives standardized error
 ```javascript
 // email.queue.js
 import { Queue } from "bullmq";
-import redisClient from "../redis/redisClient.js";
+import Redis from "ioredis";
+
+// Create Redis connection for BullMQ (requires ioredis)
+const getRedisConnection = () => {
+  const redisUrl = process.env.REDIS_URL;
+  if (!redisUrl) return undefined;
+
+  return new Redis(redisUrl, {
+    maxRetriesPerRequest: null,  // Required for BullMQ
+    enableReadyCheck: false,
+  });
+};
 
 export const emailQueue = new Queue("sendMail", {
-  connection: redisClient,
+  connection: getRedisConnection(),
   defaultJobOptions: {
     attempts: 2,
     backoff: {
@@ -710,7 +721,18 @@ export const emailQueue = new Queue("sendMail", {
 ```javascript
 // email.worker.js
 import { Worker } from "bullmq";
+import Redis from "ioredis";
 import { sendEmail } from "../utils/mailgen.js";
+
+const getRedisConnection = () => {
+  const redisUrl = process.env.REDIS_URL;
+  if (!redisUrl) return undefined;
+
+  return new Redis(redisUrl, {
+    maxRetriesPerRequest: null,
+    enableReadyCheck: false,
+  });
+};
 
 const emailWorker = new Worker(
   "sendMail",
@@ -718,7 +740,7 @@ const emailWorker = new Worker(
     const { email, subject, mailGenContent } = job.data;
     await sendEmail({ email, subject, mailGenContent });
   },
-  { connection: redisClient }
+  { connection: getRedisConnection() }
 );
 
 emailWorker.on("completed", (job) => {
@@ -981,30 +1003,37 @@ const chats = await Chat.find({ user: userId }).populate("lastMessage");
 
 ```env
 # Server
-NODE_ENV=production
+NODE_ENV=development
 PORT=9990
 
-# Database
-MONGODB_URI=mongodb+srv://user:pass@cluster.mongodb.net/baatcheet
+# Database (MongoDB Atlas)
+DB_USERNAME=your_db_username
+DB_PASSWORD=your_db_password
+DB_CLUSTER=cluster0.xxxxx.mongodb.net
+DB_NAME=BaatCheet
 
-# Redis
-REDIS_URL=redis://user:pass@host:port
+# Redis (Upstash)
+REDIS_URL=rediss://default:your_password@your_host.upstash.io:6379
 
 # JWT
-ACCESS_TOKEN_SECRET=your-secret-key
+ACCESS_TOKEN_SECRET=your-secret-key-min-64-chars
 ACCESS_TOKEN_EXPIRY=15m
-REFRESH_TOKEN_SECRET=your-refresh-secret
+REFRESH_TOKEN_SECRET=your-refresh-secret-min-64-chars
 REFRESH_TOKEN_EXPIRY=7d
 
-# Email (SMTP)
+# Email (Gmail SMTP)
 SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
+SMTP_PORT=465
 SMTP_USER=your-email@gmail.com
-SMTP_PASSWORD=app-password
-SMTP_FROM="Baat Cheet" <your-email@gmail.com>
+SMTP_PASSWORD=your-app-password
 
 # CORS
 CORS_ORIGINS=http://localhost:5173,https://your-domain.com
+
+# Cloudinary (File Uploads)
+CLOUDINARY_CLOUD_NAME=your_cloud_name
+CLOUDINARY_API_KEY=your_api_key
+CLOUDINARY_API_SECRET=your_api_secret
 ```
 
 ---
