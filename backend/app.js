@@ -37,10 +37,15 @@ app.use(
       if (allowedOrigins.includes(origin)) {
         return cb(null, true);
       }
-      return cb(new Error("Not allowed by CORS"));
+      // In production, reject unknown origins; in dev, allow all
+      if (process.env.NODE_ENV === "production") {
+        return cb(null, false);
+      }
+      return cb(null, true);
     },
-    methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     credentials: true,
+    allowedHeaders: ["Content-Type", "Authorization"],
   }),
 );
 
