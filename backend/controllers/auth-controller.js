@@ -40,10 +40,6 @@ const hashRefreshToken = (refreshToken) =>
 
 // ===================== REGISTER USER =====================
 const registerUser = asyncHandler(async (req, res) => {
-  const user = req?.user;
-  if (user) {
-    throw new ApiError(401, "Cannot create user while being logged in");
-  }
   const { username, email, password } = req.body;
 
   //  Check if user already exists

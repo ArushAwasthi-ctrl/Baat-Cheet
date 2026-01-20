@@ -25,16 +25,31 @@ const processQueue = (error) => {
   failedQueue = [];
 };
 
+// Public endpoints that should NOT trigger token refresh
+const publicEndpoints = [
+  "/auth/register",
+  "/auth/login",
+  "/auth/verify-otp",
+  "/auth/resend-verify-otp",
+  "/auth/forgotpassword",
+  "/auth/verify-forgotpassword-otp",
+];
+
 // Response interceptor for token refresh
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
 
+    // Check if this is a public endpoint - don't retry with refresh
+    const isPublicEndpoint = publicEndpoints.some((endpoint) =>
+      originalRequest.url?.includes(endpoint)
+    );
+
     // If error is 401 and we haven't retried yet
     if (error.response?.status === 401 && !originalRequest._retry) {
-      // If it's a refresh request that failed, don't retry
-      if (originalRequest.url?.includes("/auth/refresh")) {
+      // If it's a public endpoint or refresh request, don't retry
+      if (isPublicEndpoint || originalRequest.url?.includes("/auth/refresh")) {
         return Promise.reject(error);
       }
 
