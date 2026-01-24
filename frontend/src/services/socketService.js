@@ -72,8 +72,8 @@ class SocketService {
         this.socket.disconnect();
         this.socket.connect();
       }
-    } catch (error) {
-      console.error("Failed to refresh token for socket:", error);
+    } catch {
+      // Token refresh failed - user will need to re-login
     } finally {
       this.isRefreshingToken = false;
     }
@@ -85,13 +85,11 @@ class SocketService {
 
     // Connection events
     this.socket.on("connect", () => {
-      console.log("Socket connected:", this.socket.id);
       this.broadcastConnectionState(true);
       this.reconnectAttempts = 0;
     });
 
     this.socket.on("disconnect", (reason) => {
-      console.log("Socket disconnected:", reason);
       this.broadcastConnectionState(false);
 
       // If server closed connection, attempt reconnect
@@ -101,7 +99,6 @@ class SocketService {
     });
 
     this.socket.on("connect_error", (error) => {
-      console.error("Socket connection error:", error.message);
       this.reconnectAttempts++;
       this.broadcastConnectionState(false);
 
@@ -111,13 +108,11 @@ class SocketService {
       }
     });
 
-    this.socket.on("reconnect", (attemptNumber) => {
-      console.log("Socket reconnected after", attemptNumber, "attempts");
+    this.socket.on("reconnect", () => {
       this.broadcastConnectionState(true);
     });
 
     this.socket.on("reconnect_failed", () => {
-      console.error("Socket reconnection failed after max attempts");
       this.broadcastConnectionState(false);
     });
 

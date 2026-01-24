@@ -6,6 +6,8 @@ import dbCall from "./db/dbCall.js";
 import app from "./app.js";
 import redisCall, { redisClient } from "./redis/redisClient.js";
 import { initializeSocket } from "./socket/index.js";
+// Start email worker in the same process (for Render deployment)
+import "./workers/email.worker.js";
 
 // Build MongoDB URI (prefer full URI from env)
 const buildMongoUri = () => {

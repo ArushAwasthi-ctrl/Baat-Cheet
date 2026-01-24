@@ -96,8 +96,7 @@ const ContactsTab = ({ onStartChat }) => {
       const users = response.data?.users || [];
       // Filter out current user
       setSearchResults(users.filter((u) => u._id !== user?._id));
-    } catch (error) {
-      console.error("Search failed:", error);
+    } catch {
       setSearchResults([]);
     } finally {
       setIsSearching(false);
@@ -194,8 +193,8 @@ const SettingsTab = ({ user, onLogout }) => {
       });
       dispatch(updateUser(response.data?.user || response.data));
       setIsEditing(false);
-    } catch (error) {
-      console.error("Failed to update profile:", error);
+    } catch {
+      // Profile update failed silently - user can retry
     } finally {
       setIsSaving(false);
     }

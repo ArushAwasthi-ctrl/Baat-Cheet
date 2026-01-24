@@ -29,10 +29,22 @@ const refreshCookieOptions = {
   maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
 };
 
+// Options for clearing cookies (without maxAge)
+const clearCookieOptions = {
+  httpOnly: true,
+  secure: isProd,
+  sameSite: isProd ? "none" : "lax",
+  path: "/",
+};
+
 // ===================== HELPER FUNCTIONS =====================
 
 // Generate a 6-digit numeric OTP (cryptographically strong)
 const generateOTP = () => crypto.randomInt(100000, 1000000).toString();
+
+// Hash OTP (to store securely in Redis)
+const hashOTP = (otp) =>
+  crypto.createHash("sha256").update(otp).digest("hex");
 
 // Hash refresh token (to store securely in Redis)
 const hashRefreshToken = (refreshToken) =>
@@ -257,10 +269,10 @@ const logoutUser = asyncHandler(async (req, res) => {
   //  Delete refresh token from Redis (invalidate session)
   await redisClient.del(`refresh:${id}`);
 
-  //  Clear cookies
+  //  Clear cookies (use clearCookieOptions without maxAge)
   res
-    .clearCookie("accessToken", accessCookieOptions)
-    .clearCookie("refreshToken", refreshCookieOptions);
+    .clearCookie("accessToken", clearCookieOptions)
+    .clearCookie("refreshToken", clearCookieOptions);
 
   //  Send response
   return res

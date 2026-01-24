@@ -70,20 +70,10 @@ const userSchema = new mongoose.Schema(
 
 
 // ------------------------------------------------
-// PASSWORD HASHING
-// ------------------------------------------------
-// userSchema.pre("save", async function (next) {
-//   if (!this.isModified("password")) return next();
-
-//   const salt = await bcrypt.genSalt(10);
-//   this.password = await bcrypt.hash(this.password, salt);
-
-//   next();
-// });
-
-// ------------------------------------------------
 // INSTANCE METHODS
 // ------------------------------------------------
+// Note: Password hashing is done manually in auth-controller.js
+// during registration and password reset for explicit control
 userSchema.methods.createAccessToken = function () {
   return jwt.sign(
     { _id: this._id, email: this.email },

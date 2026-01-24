@@ -49,8 +49,7 @@ const GroupChatModal = () => {
         // Filter out current user from search results
         const allUsers = response.data?.users || [];
         setUsers(allUsers.filter((u) => u._id !== currentUser?._id));
-      } catch (err) {
-        console.error("Search error:", err);
+      } catch {
         setError("Failed to search users");
         setUsers([]);
       } finally {
@@ -121,8 +120,7 @@ const GroupChatModal = () => {
         })
       ).unwrap();
       handleClose();
-    } catch (err) {
-      console.error("Failed to create group:", err);
+    } catch {
       setError("Failed to create group. Please try again.");
     }
   };

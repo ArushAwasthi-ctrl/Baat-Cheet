@@ -39,8 +39,7 @@ const NewChatModal = () => {
         // Filter out current user from search results
         const allUsers = response.data?.users || [];
         setUsers(allUsers.filter((u) => u._id !== user?._id));
-      } catch (err) {
-        console.error("Search error:", err);
+      } catch {
         setError("Failed to search users");
         setUsers([]);
       } finally {
@@ -75,8 +74,7 @@ const NewChatModal = () => {
     try {
       await dispatch(createDirectChat(targetUser._id)).unwrap();
       handleClose();
-    } catch (err) {
-      console.error("Failed to create chat:", err);
+    } catch {
       setError("Failed to start chat. Please try again.");
       setSelectedUser(null);
     }

@@ -32,8 +32,8 @@ const emitToChat = async (io, chatId, event, data, excludeUserId = null) => {
       }
       emitToUser(io, participantIdStr, event, data);
     });
-  } catch (error) {
-    console.error("Error emitting to chat:", error);
+  } catch {
+    // Silently fail - chat may have been deleted
   }
 };
 
@@ -90,7 +90,6 @@ const initializeSocket = (server) => {
 
   io.on("connection", async (socket) => {
     const userId = socket.user._id.toString();
-    console.log(`User connected: ${socket.user.username} (${socket.id})`);
 
     // Track user's socket connection
     if (!userSockets.has(userId)) {
@@ -110,8 +109,8 @@ const initializeSocket = (server) => {
       userChats.forEach((chat) => {
         socket.join(`chat:${chat._id}`);
       });
-    } catch (error) {
-      console.error("Error joining chat rooms:", error);
+    } catch {
+      // Silently fail - user may have no chats yet
     }
 
     // Broadcast online status to all user's contacts
@@ -208,7 +207,6 @@ const initializeSocket = (server) => {
     // ==================== DISCONNECT HANDLER ====================
 
     socket.on("disconnect", async () => {
-      console.log(`User disconnected: ${socket.user.username} (${socket.id})`);
 
       // Remove this socket from user's connections
       const sockets = userSockets.get(userId);
