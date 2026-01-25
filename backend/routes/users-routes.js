@@ -5,6 +5,7 @@ import {
   getAllUsers,
   getIndividualUser,
   updateProfile,
+  deleteAccount,
 } from "../controllers/users-controller.js";
 import { userUpdateProfileValidator } from "../validators/validate.js";
 import validate from "../middlewares/validator-middleware.js";
@@ -12,6 +13,9 @@ const UserRouter = Router();
 
 // GET current logged-in user
 UserRouter.route("/me").get(authValidator, getCurrentUser);
+
+// DELETE current user account
+UserRouter.route("/me").delete(authValidator, deleteAccount);
 
 // GET all users (search + pagination)
 UserRouter.route("/").get(authValidator, getAllUsers);

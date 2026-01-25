@@ -1,5 +1,5 @@
 /* eslint-disable react-hooks/set-state-in-effect */
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useSelector } from "react-redux";
 import socketService from "../services/socketService";
 
@@ -49,11 +49,43 @@ export const useSocket = () => {
     isConnected,
     socket: socketService.socket,
     joinChat: socketService.joinChat.bind(socketService),
-    // leaveChat: socketService.leaveChat.bind(socketService), // Unused - commented out
+    leaveChat: socketService.leaveChat.bind(socketService),
     startTyping: socketService.startTyping.bind(socketService),
     stopTyping: socketService.stopTyping.bind(socketService),
     markAsRead: socketService.markAsRead.bind(socketService),
   };
+};
+
+// Hook to manage chat room joining/leaving with proper cleanup
+export const useChatRoom = (chatId) => {
+  const previousChatIdRef = useRef(null);
+  const { isConnected } = useSocket();
+
+  useEffect(() => {
+    if (!isConnected) return;
+
+    const previousChatId = previousChatIdRef.current;
+
+    // Leave previous chat room
+    if (previousChatId && previousChatId !== chatId) {
+      socketService.leaveChat(previousChatId);
+    }
+
+    // Join new chat room
+    if (chatId) {
+      socketService.joinChat(chatId);
+      previousChatIdRef.current = chatId;
+    }
+
+    // Cleanup: leave chat room on unmount
+    return () => {
+      if (chatId) {
+        socketService.leaveChat(chatId);
+      }
+    };
+  }, [chatId, isConnected]);
+
+  return { isConnected };
 };
 
 export const useTypingIndicator = (chatId) => {

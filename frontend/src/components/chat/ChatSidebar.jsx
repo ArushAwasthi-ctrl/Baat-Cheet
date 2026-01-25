@@ -27,6 +27,8 @@ import {
   Camera,
   Check,
   X,
+  Trash2,
+  AlertTriangle,
 } from "lucide-react";
 import { cn, formatRelativeTime } from "@/lib/utils";
 import Logo from "@/components/shared/Logo";
@@ -181,6 +183,9 @@ const SettingsTab = ({ user, onLogout }) => {
   const [username, setUsername] = useState(user?.username || "");
   const [bio, setBio] = useState(user?.bio || "");
   const [isSaving, setIsSaving] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
 
   const handleSaveProfile = async () => {
     if (!username.trim()) return;
@@ -204,6 +209,24 @@ const SettingsTab = ({ user, onLogout }) => {
     setUsername(user?.username || "");
     setBio(user?.bio || "");
     setIsEditing(false);
+  };
+
+  const handleDeleteAccount = async () => {
+    if (deleteConfirmText !== "DELETE") return;
+
+    setIsDeleting(true);
+    try {
+      await userService.deleteAccount();
+      toast.success("Account deleted successfully");
+      // Logout will happen automatically as cookies are cleared
+      onLogout();
+    } catch (error) {
+      toast.error(error?.response?.data?.message || "Failed to delete account");
+    } finally {
+      setIsDeleting(false);
+      setShowDeleteConfirm(false);
+      setDeleteConfirmText("");
+    }
   };
 
   return (
@@ -339,7 +362,64 @@ const SettingsTab = ({ user, onLogout }) => {
           <LogOut className="h-5 w-5" />
           <span className="flex-1 text-left text-sm font-medium">Logout</span>
         </button>
+
+        {/* Delete Account */}
+        <button
+          onClick={() => setShowDeleteConfirm(true)}
+          className="w-full flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-destructive/10 transition-colors text-destructive"
+        >
+          <Trash2 className="h-5 w-5" />
+          <span className="flex-1 text-left text-sm font-medium">Delete Account</span>
+        </button>
       </div>
+
+      {/* Delete Account Confirmation Modal */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-card rounded-xl shadow-xl max-w-md w-full p-6 space-y-4">
+            <div className="flex items-center gap-3 text-destructive">
+              <AlertTriangle className="h-6 w-6" />
+              <h3 className="text-lg font-semibold">Delete Account</h3>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              This action is <strong>permanent</strong> and cannot be undone. All your data, messages, and chat history will be deleted.
+            </p>
+            <p className="text-sm text-foreground">
+              Type <strong>DELETE</strong> to confirm:
+            </p>
+            <input
+              type="text"
+              value={deleteConfirmText}
+              onChange={(e) => setDeleteConfirmText(e.target.value)}
+              placeholder="Type DELETE"
+              className="w-full px-3 py-2 rounded-lg bg-muted/50 border border-border text-sm focus:outline-none focus:ring-2 focus:ring-destructive"
+            />
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setShowDeleteConfirm(false);
+                  setDeleteConfirmText("");
+                }}
+                className="flex-1 px-4 py-2 bg-muted text-muted-foreground rounded-lg text-sm font-medium hover:bg-muted/80 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteAccount}
+                disabled={deleteConfirmText !== "DELETE" || isDeleting}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-destructive text-destructive-foreground rounded-lg text-sm font-medium hover:bg-destructive/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isDeleting ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Trash2 className="h-4 w-4" />
+                )}
+                Delete Forever
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

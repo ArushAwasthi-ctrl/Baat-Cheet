@@ -7,10 +7,11 @@ import ContactInfoPanel from "@/components/chat/ContactInfoPanel";
 import NewChatModal from "@/components/chat/NewChatModal";
 import GroupChatModal from "@/components/chat/GroupChatModal";
 import ConnectionStatus from "@/components/shared/ConnectionStatus";
+import ErrorBoundary from "@/components/shared/ErrorBoundary";
 import { useSelector, useDispatch } from "react-redux";
 import { toggleGroupInfo, setGroupInfoOpen } from "@/store/slices/uiSlice";
 import { fetchChats, setSelectedChat } from "@/store/slices/chatSlice";
-import { useSocket } from "@/hooks/useSocket";
+import { useSocket, useChatRoom } from "@/hooks/useSocket";
 
 const ChatLayout = () => {
   const dispatch = useDispatch();
@@ -20,7 +21,10 @@ const ChatLayout = () => {
   const [showMobileSidebar, setShowMobileSidebar] = useState(true);
 
   // Initialize socket connection
-  const { isConnected, joinChat } = useSocket();
+  useSocket();
+
+  // Manage chat room joining/leaving with proper cleanup
+  useChatRoom(selectedChat?._id);
 
   // Check for mobile viewport
   useEffect(() => {
@@ -36,13 +40,6 @@ const ChatLayout = () => {
   useEffect(() => {
     dispatch(fetchChats());
   }, [dispatch]);
-
-  // Join/leave chat rooms when selected chat changes
-  useEffect(() => {
-    if (selectedChat?._id && isConnected) {
-      joinChat(selectedChat._id);
-    }
-  }, [selectedChat?._id, isConnected, joinChat]);
 
   const handleSelectChat = (chat) => {
     dispatch(setSelectedChat(chat));
@@ -79,10 +76,12 @@ const ChatLayout = () => {
               transition={{ duration: 0.2 }}
               className="h-full w-full"
             >
-              <ChatSidebar
-                selectedChat={selectedChat}
-                onSelectChat={handleSelectChat}
-              />
+              <ErrorBoundary>
+                <ChatSidebar
+                  selectedChat={selectedChat}
+                  onSelectChat={handleSelectChat}
+                />
+              </ErrorBoundary>
             </motion.div>
           ) : groupInfoOpen && selectedChat ? (
             <motion.div
@@ -93,12 +92,14 @@ const ChatLayout = () => {
               transition={{ duration: 0.2 }}
               className="h-full w-full"
             >
-              <ContactInfoPanel
-                chat={selectedChat}
-                onClose={() => dispatch(setGroupInfoOpen(false))}
-                onBack={handleBackToChats}
-                isMobile={true}
-              />
+              <ErrorBoundary>
+                <ContactInfoPanel
+                  chat={selectedChat}
+                  onClose={() => dispatch(setGroupInfoOpen(false))}
+                  onBack={handleBackToChats}
+                  isMobile={true}
+                />
+              </ErrorBoundary>
             </motion.div>
           ) : (
             <motion.div
@@ -109,12 +110,14 @@ const ChatLayout = () => {
               transition={{ duration: 0.2 }}
               className="h-full w-full"
             >
-              <ChatArea
-                chat={selectedChat}
-                onToggleInfo={handleToggleInfo}
-                onBack={handleBackToChats}
-                isMobile={true}
-              />
+              <ErrorBoundary>
+                <ChatArea
+                  chat={selectedChat}
+                  onToggleInfo={handleToggleInfo}
+                  onBack={handleBackToChats}
+                  isMobile={true}
+                />
+              </ErrorBoundary>
             </motion.div>
           )}
         </AnimatePresence>
@@ -140,20 +143,24 @@ const ChatLayout = () => {
             transition={{ duration: 0.2 }}
             className="h-full border-r border-border shrink-0 overflow-hidden hidden md:block"
           >
-            <ChatSidebar
-              selectedChat={selectedChat}
-              onSelectChat={handleSelectChat}
-            />
+            <ErrorBoundary>
+              <ChatSidebar
+                selectedChat={selectedChat}
+                onSelectChat={handleSelectChat}
+              />
+            </ErrorBoundary>
           </motion.aside>
         )}
       </AnimatePresence>
 
       {/* Main Chat Area */}
       <main className="flex-1 h-full flex flex-col min-w-0">
-        <ChatArea
-          chat={selectedChat}
-          onToggleInfo={handleToggleInfo}
-        />
+        <ErrorBoundary>
+          <ChatArea
+            chat={selectedChat}
+            onToggleInfo={handleToggleInfo}
+          />
+        </ErrorBoundary>
       </main>
 
       {/* Contact/Group Info Panel */}
@@ -166,10 +173,12 @@ const ChatLayout = () => {
             transition={{ duration: 0.2 }}
             className="h-full border-l border-border shrink-0 overflow-hidden hidden lg:block"
           >
-            <ContactInfoPanel
-              chat={selectedChat}
-              onClose={() => dispatch(toggleGroupInfo())}
-            />
+            <ErrorBoundary>
+              <ContactInfoPanel
+                chat={selectedChat}
+                onClose={() => dispatch(toggleGroupInfo())}
+              />
+            </ErrorBoundary>
           </motion.aside>
         )}
       </AnimatePresence>

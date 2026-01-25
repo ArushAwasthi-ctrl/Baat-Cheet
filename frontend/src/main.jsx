@@ -15,6 +15,7 @@ const SignupPage = lazy(() => import("./pages/SignupPage"));
 const VerifyOtpPage = lazy(() => import("./pages/VerifyOtpPage"));
 const ForgotPasswordPage = lazy(() => import("./pages/ForgotPasswordPage"));
 const ChatPage = lazy(() => import("./pages/ChatPage"));
+const ProtectedRoute = lazy(() => import("./components/shared/ProtectedRoute"));
 
 // Error Boundary fallback
 const ErrorFallback = () => (
@@ -79,7 +80,9 @@ const router = createBrowserRouter([
     path: "/chat",
     element: (
       <Suspense fallback={<PageLoader />}>
-        <ChatPage />
+        <ProtectedRoute>
+          <ChatPage />
+        </ProtectedRoute>
       </Suspense>
     ),
   },

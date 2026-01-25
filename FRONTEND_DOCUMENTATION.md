@@ -36,6 +36,10 @@ This document covers everything you need to know about the frontend architecture
 - Fully responsive design (mobile + desktop)
 - Premium loading animations
 - Swiper testimonials carousel
+- Emoji picker with emoji-mart
+- Account deletion with confirmation
+- Protected routes with proper auth checking
+- Error boundaries for graceful error handling
 
 ---
 
@@ -115,9 +119,12 @@ frontend/
 │   │   │   └── NoSearchResults.jsx # Empty search state
 │   │   │
 │   │   ├── shared/          # Shared components
-│   │   │   ├── Logo.jsx          # Custom SVG logo with gradient
-│   │   │   ├── PageLoader.jsx    # Premium animated loading screen
-│   │   │   └── ThemeToggle.jsx   # Dark/light switch
+│   │   │   ├── ConnectionStatus.jsx  # Socket connection indicator
+│   │   │   ├── ErrorBoundary.jsx     # React error boundary component
+│   │   │   ├── Logo.jsx              # Custom SVG logo with gradient
+│   │   │   ├── PageLoader.jsx        # Premium animated loading screen
+│   │   │   ├── ProtectedRoute.jsx    # Auth guard wrapper component
+│   │   │   └── ThemeToggle.jsx       # Dark/light switch
 │   │   │
 │   │   └── ui/              # Base UI components
 │   │       ├── Avatar.jsx        # User avatar with lazy loading
@@ -440,31 +447,49 @@ const ChatLayout = () => {
 
 ### Persistent Auth (Page Refresh)
 
+Uses `ProtectedRoute` component for reusable auth protection:
+
 ```jsx
-// ChatPage.jsx - Fixed to prevent flash redirect
-const ChatPage = () => {
+// ProtectedRoute.jsx - Reusable auth guard
+const ProtectedRoute = ({ children }) => {
+  const dispatch = useDispatch();
+  const { isAuthenticated, isLoading, user } = useSelector((state) => state.auth);
   const [hasCheckedAuth, setHasCheckedAuth] = useState(false);
 
   useEffect(() => {
     const checkAuth = async () => {
-      try {
-        await dispatch(getCurrentUser()).unwrap();
-      } catch (error) {
-        // Not authenticated
-      } finally {
-        setHasCheckedAuth(true);  // Always set after check
+      if (!user && !isAuthenticated) {
+        try {
+          await dispatch(getCurrentUser()).unwrap();
+        } catch {
+          // User not authenticated - will redirect below
+        }
       }
+      setHasCheckedAuth(true);
     };
+    checkAuth();
+  }, [dispatch, user, isAuthenticated]);
 
-    if (!user) checkAuth();
-    else setHasCheckedAuth(true);
-  }, []);
-
-  // Show premium loader until auth check completes
+  // Show loading while checking auth
   if (!hasCheckedAuth || isLoading) return <PageLoader />;
-  if (!isAuthenticated) return null; // Will redirect
-  return <ChatLayout />;
+
+  // Redirect to login if not authenticated
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
+
+  return children;
 };
+
+// Usage in router (main.jsx):
+{
+  path: "/chat",
+  element: (
+    <Suspense fallback={<PageLoader />}>
+      <ProtectedRoute>
+        <ChatPage />
+      </ProtectedRoute>
+    </Suspense>
+  ),
+}
 ```
 
 ### Token Refresh (Axios Interceptor)
@@ -674,40 +699,152 @@ const ChatSidebar = () => {
 };
 ```
 
-### Settings Tab with Profile Edit
+### Settings Tab with Profile Edit & Account Deletion
 
 ```jsx
 const SettingsTab = () => {
   const { user } = useSelector((state) => state.auth);
   const [isEditing, setIsEditing] = useState(false);
-  const [formData, setFormData] = useState({
-    username: user?.username,
-    bio: user?.bio,
-  });
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
 
-  const handleSave = async () => {
-    await dispatch(updateProfile(formData));
-    setIsEditing(false);
+  const handleDeleteAccount = async () => {
+    if (deleteConfirmText !== "DELETE") return;
+    try {
+      await userService.deleteAccount();
+      toast.success("Account deleted successfully");
+      onLogout();
+    } catch (error) {
+      toast.error("Failed to delete account");
+    }
   };
 
   return (
     <div>
-      {/* Profile section */}
-      <Avatar src={user.avatar} name={user.username} size="xl" />
+      {/* Profile edit section */}
+      {/* ... */}
 
-      {isEditing ? (
-        <Input value={formData.username} onChange={...} />
-      ) : (
-        <span>{user.username}</span>
+      {/* Delete Account with confirmation */}
+      <button onClick={() => setShowDeleteConfirm(true)}>
+        <Trash2 /> Delete Account
+      </button>
+
+      {showDeleteConfirm && (
+        <div className="modal">
+          <p>Type DELETE to confirm:</p>
+          <input value={deleteConfirmText} onChange={...} />
+          <button onClick={handleDeleteAccount} disabled={deleteConfirmText !== "DELETE"}>
+            Delete Forever
+          </button>
+        </div>
       )}
-
-      {/* Theme toggle */}
-      <ThemeToggle />
-
-      {/* Logout button */}
-      <Button onClick={() => dispatch(logout())}>Logout</Button>
     </div>
   );
+};
+```
+
+### Emoji Picker Integration
+
+Using `@emoji-mart/react` for emoji selection in ChatArea:
+
+```jsx
+import data from "@emoji-mart/data";
+import Picker from "@emoji-mart/react";
+
+const ChatArea = () => {
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+
+  const handleEmojiSelect = (emoji) => {
+    setMessage((prev) => prev + emoji.native);
+    inputRef.current?.focus();
+  };
+
+  return (
+    <div className="input-area">
+      <button onClick={() => setShowEmojiPicker(!showEmojiPicker)}>
+        {showEmojiPicker ? <X /> : <Smile />}
+      </button>
+
+      {showEmojiPicker && (
+        <Picker
+          data={data}
+          onEmojiSelect={handleEmojiSelect}
+          theme="auto"
+          previewPosition="none"
+        />
+      )}
+    </div>
+  );
+};
+```
+
+### Error Boundaries
+
+Wrap components to catch and handle errors gracefully:
+
+```jsx
+class ErrorBoundary extends Component {
+  state = { hasError: false, error: null };
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="error-fallback">
+          <h2>Something went wrong</h2>
+          <p>{this.state.error?.message}</p>
+          <button onClick={() => this.setState({ hasError: false })}>
+            Try Again
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+// Usage in ChatLayout:
+<ErrorBoundary>
+  <ChatSidebar />
+</ErrorBoundary>
+<ErrorBoundary>
+  <ChatArea />
+</ErrorBoundary>
+```
+
+### useChatRoom Hook - Memory Leak Fix
+
+Properly manages socket room joining/leaving:
+
+```jsx
+export const useChatRoom = (chatId) => {
+  const previousChatIdRef = useRef(null);
+  const { isConnected } = useSocket();
+
+  useEffect(() => {
+    if (!isConnected) return;
+
+    const previousChatId = previousChatIdRef.current;
+
+    // Leave previous chat room
+    if (previousChatId && previousChatId !== chatId) {
+      socketService.leaveChat(previousChatId);
+    }
+
+    // Join new chat room
+    if (chatId) {
+      socketService.joinChat(chatId);
+      previousChatIdRef.current = chatId;
+    }
+
+    // Cleanup on unmount
+    return () => {
+      if (chatId) socketService.leaveChat(chatId);
+    };
+  }, [chatId, isConnected]);
 };
 ```
 

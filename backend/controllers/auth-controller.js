@@ -64,13 +64,14 @@ const registerUser = asyncHandler(async (req, res) => {
   if (await redisClient.get(ratelimitKey))
     throw new ApiError(429, "Too many OTP requests. Please try again later.");
 
-  //  Generate OTP
+  //  Generate OTP and hash it for secure storage
   const otp = generateOTP();
+  const hashedOtp = hashOTP(otp);
 
-  // Temporarily store user data and OTP in Redis (5 minutes)
+  // Temporarily store user data and hashed OTP in Redis (5 minutes)
   await redisClient.set(
     `register:${email}`,
-    JSON.stringify({ username, email, password, otp }),
+    JSON.stringify({ username, email, password, otp: hashedOtp }),
     "EX",
     300,
   );
@@ -78,7 +79,7 @@ const registerUser = asyncHandler(async (req, res) => {
   //  Set rate limit cooldown (1 minute)
   await redisClient.set(ratelimitKey, "true", "EX", 60);
 
-  //  Send OTP email by adding in Email Queue BullMQ
+  //  Send OTP email by adding in Email Queue BullMQ (plain OTP to user)
   const intro =
     "Welcome to BaatCheet! We're very excited to have you on board.";
   emailQueue.add("sendMail", {
@@ -105,8 +106,8 @@ const verifyOtp = asyncHandler(async (req, res) => {
 
   const parsedUserData = JSON.parse(tempUserData);
 
-  // Match OTP
-  if (parsedUserData.otp !== otp) throw new ApiError(400, "Invalid OTP");
+  // Match OTP (compare hashed values)
+  if (parsedUserData.otp !== hashOTP(otp)) throw new ApiError(400, "Invalid OTP");
 
   //  Ensure user doesn't already exist
   const existingUser = await User.findOne({ email });
@@ -176,13 +177,14 @@ const resendEmailVerificationOTP = asyncHandler(async (req, res) => {
   if (await redisClient.get(ratelimitKey))
     throw new ApiError(429, "Too many OTP requests. Please try again later.");
 
-  //  Generate OTP
+  //  Generate OTP and hash it for secure storage
   const otp = generateOTP();
+  const hashedOtp = hashOTP(otp);
 
-  // Temporarily store user data and OTP in Redis (5 minutes)
+  // Temporarily store user data and hashed OTP in Redis (5 minutes)
   await redisClient.set(
     `register:${email}`,
-    JSON.stringify({ username, email, password, otp }),
+    JSON.stringify({ username, email, password, otp: hashedOtp }),
     "EX",
     300,
   );
@@ -190,7 +192,7 @@ const resendEmailVerificationOTP = asyncHandler(async (req, res) => {
   //  Set rate limit cooldown (1 minute)
   await redisClient.set(ratelimitKey, "true", "EX", 60);
 
-  //  Send OTP email by adding in Email Queue BullMQ
+  //  Send OTP email by adding in Email Queue BullMQ (plain OTP to user)
   const intro =
     "Welcome to BaatCheet! We're very excited to have you on board.";
   emailQueue.add("sendMail", {
@@ -332,13 +334,16 @@ const forgotPassword = asyncHandler(async (req, res) => {
   if (await redisClient.get(ratelimitKey))
     throw new ApiError(429, "Too many OTP requests. Try again later");
 
+  // Generate OTP and hash it for secure storage
   const otp = generateOTP();
+  const hashedOtp = hashOTP(otp);
 
-  await redisClient.set(`reset:${email}`, JSON.stringify({ otp }), "EX", 300);
+  await redisClient.set(`reset:${email}`, JSON.stringify({ otp: hashedOtp }), "EX", 300);
   await redisClient.set(ratelimitKey, "true", "EX", 60);
 
   const intro = "Use this OTP to reset your BaatCheet account password";
 
+  // Send plain OTP to user via email
   emailQueue.add("sendResetPasswordMail", {
     email,
     subject: "Reset Password OTP",
@@ -360,7 +365,8 @@ const verifyForgotPasswordOtp = asyncHandler(async (req, res) => {
 
   const { otp: savedOtp } = JSON.parse(redisData);
 
-  if (savedOtp !== otp) throw new ApiError(400, "Invalid OTP");
+  // Compare hashed values
+  if (savedOtp !== hashOTP(otp)) throw new ApiError(400, "Invalid OTP");
 
   // Hash new password
   const hashedPassword = await bcrypt.hash(password, 10);

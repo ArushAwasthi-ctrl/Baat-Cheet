@@ -289,8 +289,9 @@ We use two tokens:
    - Check if user exists (409 Conflict if yes)
    - Check rate limit in Redis (429 if exceeded)
    - Generate 6-digit OTP (crypto.randomInt)
-   - Store in Redis: register:{email} = { userData, otp }, TTL 5 min
-   - Queue OTP email via BullMQ
+   - Hash OTP with SHA256 for secure storage
+   - Store in Redis: register:{email} = { userData, otp: hashedOtp }, TTL 5 min
+   - Send plain OTP to user's email via BullMQ
    - Return 200 "OTP sent"
 
 3. POST /api/auth/verify-otp
@@ -298,7 +299,7 @@ We use two tokens:
 
 4. Server:
    - Get temp data from Redis
-   - Validate OTP matches
+   - Hash submitted OTP and compare with stored hash
    - Hash password: bcrypt.hash(password, 10)
    - Create user in MongoDB (isVerified: true)
    - Generate tokens
@@ -476,6 +477,7 @@ if (hasMore) messages.pop();  // Remove extra
 | Endpoint | Method | Auth | Description |
 |----------|--------|------|-------------|
 | `/api/users/me` | GET | Yes | Get current user |
+| `/api/users/me` | DELETE | Yes | Delete account permanently |
 | `/api/users` | GET | Yes | Search users (pagination) |
 | `/api/users/:id` | GET | Yes | Get user by ID |
 | `/api/users/profile` | PUT | Yes | Update profile |
@@ -913,6 +915,79 @@ app.use(cors({
 
 - OTP requests: 1 per minute per email
 - Uses Redis with TTL keys
+
+### 8. OTP Security - Hashing Before Storage
+
+OTPs are hashed using SHA256 before storing in Redis:
+
+```javascript
+// Generate OTP and hash for secure storage
+const otp = generateOTP();  // 6-digit number
+const hashedOtp = hashOTP(otp);  // SHA256 hash
+
+// Store hashed OTP in Redis
+await redisClient.set(
+  `register:${email}`,
+  JSON.stringify({ userData, otp: hashedOtp }),
+  "EX", 300
+);
+
+// Send plain OTP to user's email
+emailQueue.add("sendMail", { email, otp });
+
+// On verification - compare hashes
+const storedData = await redisClient.get(`register:${email}`);
+const { otp: storedHashedOtp } = JSON.parse(storedData);
+if (storedHashedOtp !== hashOTP(submittedOtp)) {
+  throw new ApiError(400, "Invalid OTP");
+}
+```
+
+### 9. Account Deletion
+
+Comprehensive cleanup when user deletes account:
+
+```javascript
+const deleteAccount = asyncHandler(async (req, res) => {
+  const userId = req.user._id;
+
+  // 1. Remove user from all chats
+  await Chat.updateMany(
+    { participants: userId },
+    { $pull: { participants: userId, admins: userId } }
+  );
+
+  // 2. Delete empty chats
+  await Chat.deleteMany({ participants: { $size: 0 } });
+
+  // 3. Delete direct chats with only 1 participant
+  await Chat.deleteMany({ type: "direct", participants: { $size: 1 } });
+
+  // 4. Anonymize messages (keep structure, remove sender)
+  await Message.updateMany(
+    { sender: userId },
+    { $set: { sender: null, content: "[Message from deleted account]" } }
+  );
+
+  // 5. Remove from readBy arrays
+  await Message.updateMany(
+    { readBy: userId },
+    { $pull: { readBy: userId } }
+  );
+
+  // 6. Clear Redis session
+  await redisClient.del(`refresh:${userId}`);
+
+  // 7. Delete user from database
+  await User.findByIdAndDelete(userId);
+
+  // 8. Clear auth cookies
+  res.clearCookie("accessToken", clearCookieOptions)
+     .clearCookie("refreshToken", clearCookieOptions);
+
+  return res.status(200).json(new ApiResponse(200, null, "Account deleted"));
+});
+```
 
 ---
 

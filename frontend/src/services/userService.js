@@ -32,6 +32,12 @@ const userService = {
     });
     return response.data;
   },
+
+  // Delete account
+  deleteAccount: async () => {
+    const response = await api.delete("/api/users/me");
+    return response.data;
+  },
 };
 
 export default userService;

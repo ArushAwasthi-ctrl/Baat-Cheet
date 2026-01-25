@@ -14,6 +14,7 @@ import {
   CheckCheck,
   Loader2,
   ArrowLeft,
+  X,
 } from "lucide-react";
 import { cn, formatMessageTime } from "@/lib/utils";
 import Avatar from "@/components/ui/Avatar";
@@ -27,14 +28,18 @@ import { updateChatLastMessage } from "@/store/slices/chatSlice";
 import { useTypingIndicator } from "@/hooks/useSocket";
 import socketService from "@/services/socketService";
 import { toast } from "sonner";
+import data from "@emoji-mart/data";
+import Picker from "@emoji-mart/react";
 
 const ChatArea = ({ chat, onToggleInfo, onBack, isMobile = false }) => {
   const dispatch = useDispatch();
   const [message, setMessage] = useState("");
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
   const messagesContainerRef = useRef(null);
   const typingTimeoutRef = useRef(null);
+  const emojiPickerRef = useRef(null);
 
   const { user } = useSelector((state) => state.auth);
   const { messagesByChat, loadingByChat, paginationByChat, isSending } =
@@ -144,10 +149,43 @@ const ChatArea = ({ chat, onToggleInfo, onBack, isMobile = false }) => {
     });
   };
 
+  // Handle emoji selection
+  const handleEmojiSelect = (emoji) => {
+    setMessage((prev) => prev + emoji.native);
+    inputRef.current?.focus();
+  };
+
+  // Close emoji picker when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (
+        emojiPickerRef.current &&
+        !emojiPickerRef.current.contains(event.target)
+      ) {
+        setShowEmojiPicker(false);
+      }
+    };
+
+    if (showEmojiPicker) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [showEmojiPicker]);
+
   const handleSend = async () => {
     if (!message.trim() || !chat?._id || isSending) return;
 
     const content = message.trim();
+
+    // Validate message length
+    if (content.length > 5000) {
+      toast.error("Message too long (max 5000 characters)");
+      return;
+    }
+
     setMessage("");
 
     try {
@@ -484,11 +522,43 @@ const ChatArea = ({ chat, onToggleInfo, onBack, isMobile = false }) => {
               className="w-full h-11 px-4 pr-12 rounded-full bg-muted/50 border border-border text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
             />
             <button
-              onClick={() => showComingSoon("Emoji picker")}
-              className="absolute right-3 top-1/2 -translate-y-1/2 p-1 hover:bg-muted rounded-full transition-colors"
+              onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+              className={cn(
+                "absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-full transition-colors",
+                showEmojiPicker
+                  ? "bg-primary/10 text-primary"
+                  : "hover:bg-muted text-muted-foreground"
+              )}
             >
-              <Smile className="h-5 w-5 text-muted-foreground" />
+              {showEmojiPicker ? (
+                <X className="h-5 w-5" />
+              ) : (
+                <Smile className="h-5 w-5" />
+              )}
             </button>
+
+            {/* Emoji Picker */}
+            <AnimatePresence>
+              {showEmojiPicker && (
+                <motion.div
+                  ref={emojiPickerRef}
+                  initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                  transition={{ duration: 0.15 }}
+                  className="absolute bottom-full right-0 mb-2 z-50"
+                >
+                  <Picker
+                    data={data}
+                    onEmojiSelect={handleEmojiSelect}
+                    theme="auto"
+                    previewPosition="none"
+                    skinTonePosition="search"
+                    maxFrequentRows={2}
+                  />
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
           <motion.button
             onClick={handleSend}
