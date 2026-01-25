@@ -29,6 +29,19 @@ const allowedOrigins = (process.env.CORS_ORIGINS || "http://localhost:3000")
   .map((o) => o.trim())
   .filter(Boolean);
 
+// Handle preflight requests explicitly first
+app.options("*", cors({
+  origin: (origin, cb) => {
+    if (!origin) return cb(null, true);
+    if (allowedOrigins.includes(origin)) return cb(null, origin);
+    if (process.env.NODE_ENV !== "production") return cb(null, origin);
+    return cb(null, false);
+  },
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  credentials: true,
+  allowedHeaders: ["Content-Type", "Authorization"],
+}));
+
 app.use(
   cors({
     origin: (origin, cb) => {
@@ -45,8 +58,8 @@ app.use(
         return cb(null, origin);
       }
 
-      // In production, reject unauthorized origins
-      return cb(new Error(`CORS not allowed for origin: ${origin}`), false);
+      // In production, reject unauthorized origins (don't throw error, just deny)
+      return cb(null, false);
     },
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     credentials: true,
