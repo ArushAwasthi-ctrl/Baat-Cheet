@@ -1,7 +1,11 @@
 import Mailgen from "mailgen";
-import { Resend } from "resend";
+import Brevo from "@getbrevo/brevo";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+const apiInstance = new Brevo.TransactionalEmailsApi();
+apiInstance.setApiKey(
+  Brevo.TransactionalEmailsApiApiKeys.apiKey,
+  process.env.BREVO_API_KEY
+);
 
 const sendEmail = async (options) => {
   try {
@@ -20,25 +24,24 @@ const sendEmail = async (options) => {
     );
     const emailHTML = mailGenerator.generate(options.mailGenContent);
 
-    // Send mail using Resend
-    const { data, error } = await resend.emails.send({
-      from: process.env.RESEND_FROM || "BaatCheet <onboarding@resend.dev>",
-      to: options.email,
-      subject: options.subject,
-      text: emailTextual,
-      html: emailHTML,
-    });
+    // Send mail using Brevo
+    const sendSmtpEmail = new Brevo.SendSmtpEmail();
+    sendSmtpEmail.subject = options.subject;
+    sendSmtpEmail.htmlContent = emailHTML;
+    sendSmtpEmail.textContent = emailTextual;
+    sendSmtpEmail.sender = {
+      name: "BaatCheet",
+      email: process.env.BREVO_SENDER_EMAIL || "noreply.baatcheet@gmail.com",
+    };
+    sendSmtpEmail.to = [{ email: options.email }];
 
-    if (error) {
-      console.error("Email sending failed:", error);
-      throw new Error(error.message);
-    }
+    const response = await apiInstance.sendTransacEmail(sendSmtpEmail);
 
     console.log("Email sent:", {
-      id: data.id,
+      messageId: response.body.messageId,
       to: options.email,
     });
-    return data;
+    return response.body;
   } catch (error) {
     console.error("Email sending failed:", error);
     throw error;
