@@ -73,12 +73,30 @@ const socketAuthMiddleware = async (socket, next) => {
 
 // Initialize Socket.IO
 const initializeSocket = (server) => {
+  const allowedOrigins = (process.env.CORS_ORIGINS || "http://localhost:3000")
+    .split(",")
+    .map((o) => o.trim())
+    .filter(Boolean);
+
   const io = new Server(server, {
     cors: {
-      origin: (process.env.CORS_ORIGINS || "http://localhost:3000")
-        .split(",")
-        .map((o) => o.trim())
-        .filter(Boolean),
+      origin: (origin, cb) => {
+        // Allow requests with no origin (mobile apps, etc.)
+        if (!origin) return cb(null, true);
+
+        // Check if origin is in allowed list
+        if (allowedOrigins.includes(origin)) {
+          return cb(null, origin);
+        }
+
+        // In development, allow all origins
+        if (process.env.NODE_ENV !== "production") {
+          return cb(null, origin);
+        }
+
+        // In production, reject unauthorized origins
+        return cb(null, false);
+      },
       credentials: true,
     },
     pingTimeout: 60000,

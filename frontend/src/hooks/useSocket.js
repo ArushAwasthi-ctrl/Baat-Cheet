@@ -90,13 +90,16 @@ export const useChatRoom = (chatId) => {
 
 export const useTypingIndicator = (chatId) => {
   const [typingUsers, setTypingUsers] = useState([]);
+  const { user } = useSelector((state) => state.auth);
+  const currentUserId = user?._id;
 
   useEffect(() => {
     if (!chatId) return;
 
     const handleTypingStart = (event) => {
       const { chatId: typingChatId, userId, username } = event.detail;
-      if (typingChatId === chatId) {
+      // Ignore typing events from the current user (handles multiple tabs)
+      if (typingChatId === chatId && userId !== currentUserId) {
         setTypingUsers((prev) => {
           if (prev.find((u) => u.userId === userId)) return prev;
           return [...prev, { userId, username }];
@@ -118,7 +121,7 @@ export const useTypingIndicator = (chatId) => {
       window.removeEventListener("user:typing", handleTypingStart);
       window.removeEventListener("user:stopped-typing", handleTypingStop);
     };
-  }, [chatId]);
+  }, [chatId, currentUserId]);
 
   return typingUsers;
 };
