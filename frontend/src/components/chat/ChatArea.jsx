@@ -25,7 +25,7 @@ import {
   markMessagesAsRead,
 } from "@/store/slices/messageSlice";
 import { updateChatLastMessage } from "@/store/slices/chatSlice";
-import { useTypingIndicator } from "@/hooks/useSocket";
+import { useTypingIndicator, useUserStatus } from "@/hooks/useSocket";
 import socketService from "@/services/socketService";
 import { toast } from "sonner";
 import data from "@emoji-mart/data";
@@ -47,6 +47,9 @@ const ChatArea = ({ chat, onToggleInfo, onBack, isMobile = false }) => {
 
   // Get typing users for this chat
   const typingUsers = useTypingIndicator(chat?._id);
+
+  // Get real-time user status
+  const { getUserStatus } = useUserStatus();
 
   const messages = chat ? messagesByChat[chat._id] || [] : [];
   const isLoadingMessages = chat ? loadingByChat[chat._id] : false;
@@ -82,7 +85,10 @@ const ChatArea = ({ chat, onToggleInfo, onBack, isMobile = false }) => {
     const otherParticipant = chat.participants?.find(
       (p) => p._id !== user?._id
     );
-    return otherParticipant?.status === "online";
+    if (!otherParticipant) return false;
+    // Check real-time status first, fallback to static chat data
+    const realTimeStatus = getUserStatus(otherParticipant._id);
+    return realTimeStatus.status === "online" || otherParticipant?.status === "online";
   };
 
   // Fetch messages when chat changes

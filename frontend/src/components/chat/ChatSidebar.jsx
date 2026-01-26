@@ -39,6 +39,7 @@ import { resetUnreadCount } from "@/store/slices/chatSlice";
 import { logout, updateUser } from "@/store/slices/authSlice";
 import userService from "@/services/userService";
 import { toast } from "sonner";
+import { useUserStatus } from "@/hooks/useSocket";
 
 // Show coming soon toast helper
 const showComingSoon = (feature) => {
@@ -432,6 +433,9 @@ const ChatSidebar = ({ selectedChat, onSelectChat }) => {
   const { user } = useSelector((state) => state.auth);
   const { chats, isLoading, error } = useSelector((state) => state.chats);
 
+  // Get real-time user status
+  const { getUserStatus } = useUserStatus();
+
   // Helper to get chat display name
   const getChatDisplayName = (chat) => {
     if (chat.isGroup) {
@@ -461,7 +465,10 @@ const ChatSidebar = ({ selectedChat, onSelectChat }) => {
     const otherParticipant = chat.participants?.find(
       (p) => p._id !== user?._id
     );
-    return otherParticipant?.status === "online";
+    if (!otherParticipant) return false;
+    // Check real-time status first, fallback to static chat data
+    const realTimeStatus = getUserStatus(otherParticipant._id);
+    return realTimeStatus.status === "online" || otherParticipant?.status === "online";
   };
 
   // Helper to format last message
