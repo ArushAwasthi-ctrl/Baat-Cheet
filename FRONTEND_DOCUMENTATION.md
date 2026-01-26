@@ -815,6 +815,64 @@ class ErrorBoundary extends Component {
 </ErrorBoundary>
 ```
 
+### useUserStatus Hook - Real-time Online/Offline
+
+Tracks user status changes via socket events:
+
+```jsx
+export const useUserStatus = () => {
+  const [userStatuses, setUserStatuses] = useState({});
+
+  useEffect(() => {
+    const handleStatusChange = (event) => {
+      const { userId, status, lastSeen } = event.detail;
+      setUserStatuses((prev) => ({
+        ...prev,
+        [userId]: { status, lastSeen },
+      }));
+    };
+
+    window.addEventListener("user:status-change", handleStatusChange);
+    return () => window.removeEventListener("user:status-change", handleStatusChange);
+  }, []);
+
+  const getUserStatus = (userId) => userStatuses[userId] || { status: "offline" };
+  return { userStatuses, getUserStatus };
+};
+
+// Usage in components:
+const { getUserStatus } = useUserStatus();
+const realTimeStatus = getUserStatus(otherParticipant._id);
+const isOnline = realTimeStatus.status === "online";
+```
+
+### useTypingIndicator Hook - Real-time Typing Status
+
+Shows when other users are typing (filters out current user for multi-tab support):
+
+```jsx
+export const useTypingIndicator = (chatId) => {
+  const [typingUsers, setTypingUsers] = useState([]);
+  const { user } = useSelector((state) => state.auth);
+
+  useEffect(() => {
+    const handleTypingStart = (event) => {
+      const { chatId: typingChatId, userId, username } = event.detail;
+      // Ignore typing events from current user (handles multiple tabs)
+      if (typingChatId === chatId && userId !== user?._id) {
+        setTypingUsers((prev) => {
+          if (prev.find((u) => u.userId === userId)) return prev;
+          return [...prev, { userId, username }];
+        });
+      }
+    };
+    // ... handleTypingStop similar
+  }, [chatId, user?._id]);
+
+  return typingUsers;
+};
+```
+
 ### useChatRoom Hook - Memory Leak Fix
 
 Properly manages socket room joining/leaving:

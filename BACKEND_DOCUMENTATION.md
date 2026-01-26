@@ -84,7 +84,7 @@ The backend integrates seamlessly with the React frontend:
 
 | Technology | Why |
 |------------|-----|
-| **Nodemailer** | SMTP support, Multiple providers, Attachments |
+| **Brevo (HTTP API)** | Works on Render free tier (SMTP blocked), No domain required, 300 emails/day free |
 | **Mailgen** | Beautiful HTML email templates |
 
 ### Validation
@@ -672,10 +672,14 @@ Client receives standardized error
 
 ### Why Queue Emails?
 
-1. **Non-blocking**: Don't wait for SMTP response
+1. **Non-blocking**: Don't wait for API response
 2. **Retry logic**: Automatic retries on failure
 3. **Separation**: Email worker runs separately
 4. **Scalability**: Multiple workers can process queue
+
+### Why Brevo over SMTP?
+
+Render's free tier blocks SMTP ports (25, 465, 587) to prevent spam. Brevo uses HTTP API which works on all hosting providers. Free tier includes 300 emails/day without domain verification.
 
 ### Architecture
 
@@ -1096,11 +1100,9 @@ ACCESS_TOKEN_EXPIRY=15m
 REFRESH_TOKEN_SECRET=your-refresh-secret-min-64-chars
 REFRESH_TOKEN_EXPIRY=7d
 
-# Email (Gmail SMTP)
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=465
-SMTP_USER=your-email@gmail.com
-SMTP_PASSWORD=your-app-password
+# Email (Brevo)
+BREVO_API_KEY=xkeysib-your-api-key
+BREVO_SENDER_EMAIL=your-brevo-account-email@gmail.com
 
 # CORS
 CORS_ORIGINS=http://localhost:5173,https://your-domain.com

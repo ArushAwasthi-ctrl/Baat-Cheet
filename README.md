@@ -7,10 +7,13 @@ A real-time chat application built with the MERN stack, featuring instant messag
 - **Real-time Messaging** - Instant message delivery using Socket.IO
 - **Direct & Group Chats** - One-on-one conversations and group chats with admin controls
 - **User Authentication** - Secure signup/login with email OTP verification
+- **Typing Indicators** - See when others are typing in real-time
+- **Online/Offline Status** - Live user presence updates
 - **File Sharing** - Share images and files via Cloudinary
 - **Dark/Light Theme** - Toggle between themes with warm vanilla cream light mode
 - **Responsive Design** - Works seamlessly on desktop and mobile
 - **Profile Management** - Update avatar, username, and bio
+- **Emoji Picker** - Rich emoji support with emoji-mart
 
 ## Tech Stack
 
@@ -20,6 +23,7 @@ A real-time chat application built with the MERN stack, featuring instant messag
 - Socket.IO for real-time communication
 - Redis (Upstash) for caching & session management
 - BullMQ for background email jobs
+- Brevo (HTTP API) for transactional emails
 - JWT authentication (access + refresh tokens)
 - Cloudinary for file uploads
 
@@ -37,7 +41,7 @@ A real-time chat application built with the MERN stack, featuring instant messag
 - MongoDB Atlas account
 - Upstash Redis account
 - Cloudinary account
-- Gmail account (for SMTP)
+- Brevo account (free tier - 300 emails/day)
 
 ## Installation
 
@@ -74,11 +78,9 @@ A real-time chat application built with the MERN stack, featuring instant messag
    REFRESH_TOKEN_SECRET=your_secret_min_64_chars
    REFRESH_TOKEN_EXPIRY=7d
 
-   # Email
-   SMTP_HOST=smtp.gmail.com
-   SMTP_PORT=465
-   SMTP_USER=your_email@gmail.com
-   SMTP_PASSWORD=your_app_password
+   # Email (Brevo)
+   BREVO_API_KEY=xkeysib-your-api-key
+   BREVO_SENDER_EMAIL=your-brevo-account-email@gmail.com
 
    # Cloudinary
    CLOUDINARY_CLOUD_NAME=your_cloud_name
