@@ -1,5 +1,8 @@
 import Mailgen from "mailgen";
-import nodemailer from "nodemailer";
+import { Resend } from "resend";
+
+const resend = new Resend(process.env.RESEND_API_KEY);
+
 const sendEmail = async (options) => {
   try {
     // Mailgen instance
@@ -17,36 +20,25 @@ const sendEmail = async (options) => {
     );
     const emailHTML = mailGenerator.generate(options.mailGenContent);
 
-    // Setup transporter (Gmail or other SMTP)
-    const port = Number(process.env.SMTP_PORT) || 587;
-    const isSecure = port === 465; // Gmail: 465 = SSL, 587 = STARTTLS
-
-    const transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST,
-      port,
-      secure: isSecure,
-      auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASSWORD,
-      },
-    });
-
-    // Send mail
-    const info = await transporter.sendMail({
-      from: process.env.SMTP_FROM || `"BaatCheet" <${process.env.SMTP_USER}>`,
+    // Send mail using Resend
+    const { data, error } = await resend.emails.send({
+      from: process.env.RESEND_FROM || "BaatCheet <onboarding@resend.dev>",
       to: options.email,
       subject: options.subject,
       text: emailTextual,
       html: emailHTML,
     });
 
+    if (error) {
+      console.error("Email sending failed:", error);
+      throw new Error(error.message);
+    }
+
     console.log("Email sent:", {
-      messageId: info.messageId,
-      accepted: info.accepted,
-      rejected: info.rejected,
-      response: info.response,
+      id: data.id,
+      to: options.email,
     });
-    return info;
+    return data;
   } catch (error) {
     console.error("Email sending failed:", error);
     throw error;
