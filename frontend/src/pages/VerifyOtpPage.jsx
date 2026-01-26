@@ -15,7 +15,7 @@ const RESEND_COOLDOWN = 60; // seconds
 const VerifyOtpPage = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
-  const { isLoading, error, registrationEmail } = useSelector((state) => state.auth);
+  const { isLoading, error, registrationEmail, registrationData } = useSelector((state) => state.auth);
 
   const [otp, setOtp] = useState(new Array(OTP_LENGTH).fill(""));
   const [resendTimer, setResendTimer] = useState(RESEND_COOLDOWN);
@@ -122,7 +122,7 @@ const VerifyOtpPage = () => {
     setIsResending(true);
     dispatch(clearError());
 
-    const result = await dispatch(resendOtp({ email: registrationEmail }));
+    const result = await dispatch(resendOtp(registrationData || { email: registrationEmail }));
 
     if (resendOtp.fulfilled.match(result)) {
       dispatch(

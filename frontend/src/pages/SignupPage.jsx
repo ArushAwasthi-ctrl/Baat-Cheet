@@ -5,7 +5,7 @@ import { Mail, Lock, User, AlertCircle, Check } from "lucide-react";
 import AuthLayout from "@/layouts/AuthLayout";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-import { register as registerUser, clearError, setRegistrationEmail } from "@/store/slices/authSlice";
+import { register as registerUser, clearError, setRegistrationEmail, setRegistrationData } from "@/store/slices/authSlice";
 import { addToast } from "@/store/slices/uiSlice";
 import { getPasswordStrength } from "@/lib/utils";
 import { useState, useEffect } from "react";
@@ -45,6 +45,7 @@ const SignupPage = () => {
 
     if (registerUser.fulfilled.match(result)) {
       dispatch(setRegistrationEmail(data.email));
+      dispatch(setRegistrationData(data)); // Store full data for resend OTP
       dispatch(
         addToast({
           type: "success",

@@ -113,6 +113,7 @@ const initialState = {
   isLoading: false, // Start false, set to true only during async operations
   error: null,
   registrationEmail: null, // For OTP verification flow
+  registrationData: null, // Store full registration data for resend OTP
   resetEmail: null, // For password reset flow
 };
 
@@ -125,6 +126,9 @@ const authSlice = createSlice({
     },
     setRegistrationEmail: (state, action) => {
       state.registrationEmail = action.payload;
+    },
+    setRegistrationData: (state, action) => {
+      state.registrationData = action.payload;
     },
     setResetEmail: (state, action) => {
       state.resetEmail = action.payload;
@@ -188,6 +192,7 @@ const authSlice = createSlice({
         state.user = userData ? { ...userData, _id: userData._id || userData.id } : null;
         state.isAuthenticated = true;
         state.registrationEmail = null;
+        state.registrationData = null;
         state.error = null;
       })
       .addCase(verifyOtp.rejected, (state, action) => {
@@ -278,6 +283,7 @@ const authSlice = createSlice({
 export const {
   clearError,
   setRegistrationEmail,
+  setRegistrationData,
   setResetEmail,
   updateUser,
   setAuthLoading,
