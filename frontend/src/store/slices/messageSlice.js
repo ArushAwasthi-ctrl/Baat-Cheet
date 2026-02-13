@@ -29,7 +29,7 @@ export const fetchMessages = createAsyncThunk(
 export const sendMessage = createAsyncThunk(
   "messages/sendMessage",
   async (
-    { chatId, content, type = "text", attachments = [] },
+    { chatId, content, type = "text", attachments = [], files = [], replyTo = null },
     { rejectWithValue }
   ) => {
     try {
@@ -37,10 +37,52 @@ export const sendMessage = createAsyncThunk(
         content,
         type,
         attachments,
+        files,
+        replyTo,
       });
       return response.data;
     } catch (error) {
       return rejectWithValue(getErrorMessage(error, "Failed to send message"));
+    }
+  }
+);
+
+export const editMessage = createAsyncThunk(
+  "messages/editMessage",
+  async ({ messageId, content }, { rejectWithValue }) => {
+    try {
+      const response = await messageService.editMessage(messageId, content);
+      return response.data;
+    } catch (error) {
+      return rejectWithValue(getErrorMessage(error, "Failed to edit message"));
+    }
+  }
+);
+
+export const deleteMessage = createAsyncThunk(
+  "messages/deleteMessage",
+  async ({ messageId }, { rejectWithValue }) => {
+    try {
+      await messageService.deleteMessage(messageId);
+      return { messageId };
+    } catch (error) {
+      return rejectWithValue(
+        getErrorMessage(error, "Failed to delete message")
+      );
+    }
+  }
+);
+
+export const toggleReaction = createAsyncThunk(
+  "messages/toggleReaction",
+  async ({ messageId, emoji }, { rejectWithValue }) => {
+    try {
+      const response = await messageService.toggleReaction(messageId, emoji);
+      return { messageId, reactions: response.data.reactions };
+    } catch (error) {
+      return rejectWithValue(
+        getErrorMessage(error, "Failed to toggle reaction")
+      );
     }
   }
 );
@@ -157,6 +199,43 @@ const messageSlice = createSlice({
         state.messagesByChat[chatId] = messages.filter((m) => m._id !== tempId);
       }
     },
+    // Real-time: message edited by another user (from socket)
+    updateEditedMessage: (state, action) => {
+      const { chatId, messageId, content, isEdited, editedAt } = action.payload;
+      const messages = state.messagesByChat[chatId];
+      if (messages) {
+        const msg = messages.find((m) => m._id === messageId);
+        if (msg) {
+          msg.content = content;
+          msg.isEdited = isEdited;
+          msg.editedAt = editedAt;
+        }
+      }
+    },
+    // Real-time: message deleted by another user (from socket)
+    updateDeletedMessage: (state, action) => {
+      const { chatId, messageId } = action.payload;
+      const messages = state.messagesByChat[chatId];
+      if (messages) {
+        const msg = messages.find((m) => m._id === messageId);
+        if (msg) {
+          msg.isDeleted = true;
+          msg.content = "This message was deleted";
+          msg.attachments = [];
+        }
+      }
+    },
+    // Real-time: reaction toggled (from socket)
+    updateReactions: (state, action) => {
+      const { chatId, messageId, reactions } = action.payload;
+      const messages = state.messagesByChat[chatId];
+      if (messages) {
+        const msg = messages.find((m) => m._id === messageId);
+        if (msg) {
+          msg.reactions = reactions;
+        }
+      }
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -223,6 +302,45 @@ const messageSlice = createSlice({
             m.status = "read";
           });
         }
+      })
+      // Edit Message
+      .addCase(editMessage.fulfilled, (state, action) => {
+        const msg = action.payload.message;
+        const chatId = msg.chat?.toString?.() || msg.chat;
+        const messages = state.messagesByChat[chatId];
+        if (messages) {
+          const index = messages.findIndex((m) => m._id === msg._id);
+          if (index !== -1) {
+            messages[index] = { ...messages[index], ...msg };
+          }
+        }
+      })
+      // Delete Message
+      .addCase(deleteMessage.fulfilled, (state, action) => {
+        const { messageId } = action.payload;
+        // Find the message across all chats and soft-delete it
+        for (const chatId of Object.keys(state.messagesByChat)) {
+          const messages = state.messagesByChat[chatId];
+          const msg = messages?.find((m) => m._id === messageId);
+          if (msg) {
+            msg.isDeleted = true;
+            msg.content = "This message was deleted";
+            msg.attachments = [];
+            break;
+          }
+        }
+      })
+      // Toggle Reaction
+      .addCase(toggleReaction.fulfilled, (state, action) => {
+        const { messageId, reactions } = action.payload;
+        for (const chatId of Object.keys(state.messagesByChat)) {
+          const messages = state.messagesByChat[chatId];
+          const msg = messages?.find((m) => m._id === messageId);
+          if (msg) {
+            msg.reactions = reactions;
+            break;
+          }
+        }
       });
   },
 });
@@ -236,6 +354,9 @@ export const {
   addOptimisticMessage,
   replaceOptimisticMessage,
   removeOptimisticMessage,
+  updateEditedMessage,
+  updateDeletedMessage,
+  updateReactions,
 } = messageSlice.actions;
 
 export default messageSlice.reducer;

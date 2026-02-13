@@ -15,6 +15,12 @@ import {
   Loader2,
   ArrowLeft,
   X,
+  FileText,
+  Download,
+  Pencil,
+  Trash2,
+  Reply,
+  CornerUpRight,
 } from "lucide-react";
 import { cn, formatMessageTime } from "@/lib/utils";
 import Avatar from "@/components/ui/Avatar";
@@ -23,7 +29,11 @@ import {
   fetchMessages,
   sendMessage,
   markMessagesAsRead,
+  editMessage as editMessageThunk,
+  deleteMessage as deleteMessageThunk,
+  toggleReaction,
 } from "@/store/slices/messageSlice";
+import messageService from "@/services/messageService";
 import { updateChatLastMessage } from "@/store/slices/chatSlice";
 import { useTypingIndicator, useUserStatus } from "@/hooks/useSocket";
 import socketService from "@/services/socketService";
@@ -31,15 +41,36 @@ import { toast } from "sonner";
 import data from "@emoji-mart/data";
 import Picker from "@emoji-mart/react";
 
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+const ALLOWED_FILE_TYPES = [
+  "image/jpeg", "image/png", "image/gif", "image/webp",
+  "application/pdf", "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "text/plain",
+];
+
 const ChatArea = ({ chat, onToggleInfo, onBack, isMobile = false }) => {
   const dispatch = useDispatch();
   const [message, setMessage] = useState("");
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [selectedFiles, setSelectedFiles] = useState([]);
+  const [filePreviews, setFilePreviews] = useState([]);
+  const [editingMessage, setEditingMessage] = useState(null);
+  const [replyingTo, setReplyingTo] = useState(null);
+  const [contextMenu, setContextMenu] = useState(null);
+  const [hoveredMessageId, setHoveredMessageId] = useState(null);
+  const [showSearch, setShowSearch] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState([]);
+  const [isSearching, setIsSearching] = useState(false);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
+  const fileInputRef = useRef(null);
   const messagesContainerRef = useRef(null);
   const typingTimeoutRef = useRef(null);
   const emojiPickerRef = useRef(null);
+  const contextMenuRef = useRef(null);
+  const searchTimeoutRef = useRef(null);
 
   const { user } = useSelector((state) => state.auth);
   const { messagesByChat, loadingByChat, paginationByChat, isSending } =
@@ -155,6 +186,187 @@ const ChatArea = ({ chat, onToggleInfo, onBack, isMobile = false }) => {
     });
   };
 
+  // Close context menu when clicking outside
+  useEffect(() => {
+    const handleClick = () => setContextMenu(null);
+    if (contextMenu) {
+      document.addEventListener("click", handleClick);
+    }
+    return () => document.removeEventListener("click", handleClick);
+  }, [contextMenu]);
+
+  // Handle right-click context menu on messages
+  const handleMessageContextMenu = (e, msg) => {
+    e.preventDefault();
+    if (msg.isDeleted) return;
+    setContextMenu({ x: e.clientX, y: e.clientY, message: msg });
+  };
+
+  // Start editing a message
+  const startEditMessage = (msg) => {
+    setEditingMessage(msg);
+    setMessage(msg.content || "");
+    setReplyingTo(null);
+    setContextMenu(null);
+    inputRef.current?.focus();
+  };
+
+  // Cancel editing
+  const cancelEdit = () => {
+    setEditingMessage(null);
+    setMessage("");
+  };
+
+  // Handle delete message
+  const handleDeleteMessage = async (msg) => {
+    setContextMenu(null);
+    try {
+      await dispatch(deleteMessageThunk({ messageId: msg._id })).unwrap();
+      toast.success("Message deleted");
+    } catch (error) {
+      toast.error(error || "Failed to delete message");
+    }
+  };
+
+  // Start replying to a message
+  const startReply = (msg) => {
+    setReplyingTo(msg);
+    setEditingMessage(null);
+    setContextMenu(null);
+    inputRef.current?.focus();
+  };
+
+  // Cancel reply
+  const cancelReply = () => {
+    setReplyingTo(null);
+  };
+
+  // Handle reaction
+  const handleReaction = async (msg, emoji) => {
+    setHoveredMessageId(null);
+    try {
+      await dispatch(toggleReaction({ messageId: msg._id, emoji })).unwrap();
+    } catch (error) {
+      toast.error(error || "Failed to react");
+    }
+  };
+
+  // Quick reaction emojis
+  const quickReactions = ["👍", "❤️", "😂", "😮", "😢", "🔥"];
+
+  // Handle search
+  const handleSearch = useCallback(
+    async (query) => {
+      if (!query.trim() || !chat?._id) {
+        setSearchResults([]);
+        return;
+      }
+      setIsSearching(true);
+      try {
+        const response = await messageService.searchInChat(chat._id, query);
+        setSearchResults(response.data?.messages || []);
+      } catch {
+        setSearchResults([]);
+      } finally {
+        setIsSearching(false);
+      }
+    },
+    [chat?._id]
+  );
+
+  // Debounced search
+  useEffect(() => {
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+    if (searchQuery.trim()) {
+      searchTimeoutRef.current = setTimeout(() => {
+        handleSearch(searchQuery);
+      }, 300);
+    } else {
+      setSearchResults([]);
+    }
+    return () => {
+      if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    };
+  }, [searchQuery, handleSearch]);
+
+  // Scroll to a specific message
+  const scrollToMessage = (messageId) => {
+    const el = document.getElementById(`msg-${messageId}`);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      el.classList.add("bg-primary/10");
+      setTimeout(() => el.classList.remove("bg-primary/10"), 2000);
+    }
+  };
+
+  // Reset edit/reply when chat changes
+  useEffect(() => {
+    setEditingMessage(null);
+    setReplyingTo(null);
+    setMessage("");
+    setShowSearch(false);
+    setSearchQuery("");
+    setSearchResults([]);
+  }, [chat?._id]);
+
+  // Handle file selection
+  const handleFileSelect = (e) => {
+    const files = Array.from(e.target.files || []);
+    const validFiles = [];
+
+    for (const file of files) {
+      if (!ALLOWED_FILE_TYPES.includes(file.type)) {
+        toast.error(`${file.name}: File type not allowed`);
+        continue;
+      }
+      if (file.size > MAX_FILE_SIZE) {
+        toast.error(`${file.name}: File too large (max 10MB)`);
+        continue;
+      }
+      validFiles.push(file);
+    }
+
+    if (selectedFiles.length + validFiles.length > 5) {
+      toast.error("Maximum 5 files allowed");
+      return;
+    }
+
+    setSelectedFiles((prev) => [...prev, ...validFiles]);
+
+    // Generate previews for images
+    const newPreviews = validFiles.map((file) => {
+      if (file.type.startsWith("image/")) {
+        return { file, url: URL.createObjectURL(file), type: "image" };
+      }
+      return { file, url: null, type: "file" };
+    });
+    setFilePreviews((prev) => [...prev, ...newPreviews]);
+
+    // Reset file input
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  // Remove a selected file
+  const removeFile = (index) => {
+    setSelectedFiles((prev) => prev.filter((_, i) => i !== index));
+    setFilePreviews((prev) => {
+      // Revoke object URL to prevent memory leaks
+      if (prev[index]?.url) URL.revokeObjectURL(prev[index].url);
+      return prev.filter((_, i) => i !== index);
+    });
+  };
+
+  // Cleanup file preview URLs on unmount
+  useEffect(() => {
+    return () => {
+      filePreviews.forEach((p) => {
+        if (p.url) URL.revokeObjectURL(p.url);
+      });
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Handle emoji selection
   const handleEmojiSelect = (emoji) => {
     setMessage((prev) => prev + emoji.native);
@@ -182,7 +394,10 @@ const ChatArea = ({ chat, onToggleInfo, onBack, isMobile = false }) => {
   }, [showEmojiPicker]);
 
   const handleSend = async () => {
-    if (!message.trim() || !chat?._id || isSending) return;
+    const hasContent = message.trim().length > 0;
+    const hasFiles = selectedFiles.length > 0;
+
+    if ((!hasContent && !hasFiles) || !chat?._id || isSending) return;
 
     const content = message.trim();
 
@@ -192,11 +407,40 @@ const ChatArea = ({ chat, onToggleInfo, onBack, isMobile = false }) => {
       return;
     }
 
+    // Handle edit mode
+    if (editingMessage) {
+      setMessage("");
+      setEditingMessage(null);
+      try {
+        await dispatch(
+          editMessageThunk({ messageId: editingMessage._id, content })
+        ).unwrap();
+        toast.success("Message edited");
+      } catch (error) {
+        toast.error(error || "Failed to edit message");
+      }
+      inputRef.current?.focus();
+      return;
+    }
+
     setMessage("");
+    const filesToSend = [...selectedFiles];
+    const currentReplyTo = replyingTo;
+    setSelectedFiles([]);
+    setFilePreviews((prev) => {
+      prev.forEach((p) => { if (p.url) URL.revokeObjectURL(p.url); });
+      return [];
+    });
+    setReplyingTo(null);
 
     try {
       const result = await dispatch(
-        sendMessage({ chatId: chat._id, content })
+        sendMessage({
+          chatId: chat._id,
+          content: content || undefined,
+          files: filesToSend,
+          replyTo: currentReplyTo?._id || null,
+        })
       ).unwrap();
 
       // Update the chat's last message in the sidebar
@@ -211,7 +455,8 @@ const ChatArea = ({ chat, onToggleInfo, onBack, isMobile = false }) => {
     } catch (error) {
       toast.error(error || "Failed to send message. Please try again.");
       // Restore message on error
-      setMessage(content);
+      if (content) setMessage(content);
+      if (currentReplyTo) setReplyingTo(currentReplyTo);
     }
 
     inputRef.current?.focus();
@@ -221,6 +466,10 @@ const ChatArea = ({ chat, onToggleInfo, onBack, isMobile = false }) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSend();
+    }
+    if (e.key === "Escape") {
+      if (editingMessage) cancelEdit();
+      if (replyingTo) cancelReply();
     }
   };
 
@@ -319,10 +568,13 @@ const ChatArea = ({ chat, onToggleInfo, onBack, isMobile = false }) => {
             <Video className="h-5 w-5 text-muted-foreground" />
           </button>
           <button
-            onClick={() => showComingSoon("Message search")}
-            className="p-2 rounded-lg hover:bg-muted/50 transition-colors"
+            onClick={() => { setShowSearch(!showSearch); setSearchQuery(""); setSearchResults([]); }}
+            className={cn(
+              "p-2 rounded-lg hover:bg-muted/50 transition-colors",
+              showSearch && "bg-primary/10 text-primary"
+            )}
           >
-            <Search className="h-5 w-5 text-muted-foreground" />
+            <Search className="h-5 w-5" />
           </button>
           <button
             className="p-2 rounded-lg hover:bg-muted/50 transition-colors"
@@ -332,6 +584,54 @@ const ChatArea = ({ chat, onToggleInfo, onBack, isMobile = false }) => {
           </button>
         </div>
       </header>
+
+      {/* Search Bar */}
+      <AnimatePresence>
+        {showSearch && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="border-b border-border bg-card/50 overflow-hidden"
+          >
+            <div className="p-3">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search in conversation..."
+                  className="w-full h-9 pl-9 pr-4 rounded-lg bg-muted/50 border border-border text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                  autoFocus
+                />
+                {isSearching && (
+                  <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
+                )}
+              </div>
+              {searchResults.length > 0 && (
+                <div className="mt-2 max-h-48 overflow-y-auto space-y-1">
+                  {searchResults.map((result) => (
+                    <button
+                      key={result._id}
+                      onClick={() => { scrollToMessage(result._id); setShowSearch(false); }}
+                      className="w-full text-left p-2 rounded-lg hover:bg-muted/50 transition-colors"
+                    >
+                      <p className="text-xs text-muted-foreground">
+                        {result.sender?.username} · {formatMessageTime(result.createdAt)}
+                      </p>
+                      <p className="text-sm truncate">{result.content}</p>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {searchQuery && !isSearching && searchResults.length === 0 && (
+                <p className="text-xs text-muted-foreground mt-2 text-center">No results found</p>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Messages */}
       <div
@@ -386,76 +686,191 @@ const ChatArea = ({ chat, onToggleInfo, onBack, isMobile = false }) => {
               </div>
 
               {/* Messages for this date */}
-              {msgs.map((msg) => (
+              {msgs.map((msg) => {
+                const isOwn = msg.sender?._id === user?._id || msg.sender === user?._id;
+                return (
                 <motion.div
                   key={msg._id}
+                  id={`msg-${msg._id}`}
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -10 }}
                   className={cn(
-                    "flex mb-3",
-                    msg.sender?._id === user?._id ||
-                      msg.sender === user?._id
-                      ? "justify-end"
-                      : "justify-start"
+                    "flex mb-3 group/msg transition-colors duration-500 rounded-lg",
+                    isOwn ? "justify-end" : "justify-start"
                   )}
+                  onContextMenu={(e) => handleMessageContextMenu(e, msg)}
+                  onMouseEnter={() => setHoveredMessageId(msg._id)}
+                  onMouseLeave={() => setHoveredMessageId(null)}
                 >
                   <div
                     className={cn(
-                      "flex gap-2 max-w-[70%]",
-                      (msg.sender?._id === user?._id ||
-                        msg.sender === user?._id) &&
-                        "flex-row-reverse"
+                      "flex gap-2 max-w-[70%] relative",
+                      isOwn && "flex-row-reverse"
                     )}
                   >
-                    {msg.sender?._id !== user?._id &&
-                      msg.sender !== user?._id && (
+                    {!isOwn && (
                         <Avatar
                           name={msg.sender?.username || "User"}
                           src={msg.sender?.avatar}
                           size="sm"
                         />
                       )}
-                    <div>
-                      {msg.attachments?.length > 0 &&
+                    <div className="relative">
+                      {/* Hover action buttons */}
+                      {!msg.isDeleted && hoveredMessageId === msg._id && (
+                        <div className={cn(
+                          "absolute -top-8 z-10 flex items-center gap-0.5 bg-card border border-border rounded-lg shadow-lg p-0.5",
+                          isOwn ? "right-0" : "left-0"
+                        )}>
+                          <button
+                            onClick={() => startReply(msg)}
+                            className="p-1.5 rounded hover:bg-muted/50 transition-colors"
+                            title="Reply"
+                          >
+                            <Reply className="h-3.5 w-3.5 text-muted-foreground" />
+                          </button>
+                          {quickReactions.slice(0, 3).map((emoji) => (
+                            <button
+                              key={emoji}
+                              onClick={() => handleReaction(msg, emoji)}
+                              className="p-1 rounded hover:bg-muted/50 transition-colors text-sm"
+                            >
+                              {emoji}
+                            </button>
+                          ))}
+                          {isOwn && (
+                            <>
+                              <button
+                                onClick={() => startEditMessage(msg)}
+                                className="p-1.5 rounded hover:bg-muted/50 transition-colors"
+                                title="Edit"
+                              >
+                                <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteMessage(msg)}
+                                className="p-1.5 rounded hover:bg-muted/50 transition-colors"
+                                title="Delete"
+                              >
+                                <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Reply reference */}
+                      {msg.replyTo && !msg.isDeleted && (
+                        <button
+                          onClick={() => scrollToMessage(msg.replyTo._id)}
+                          className={cn(
+                            "w-full mb-1 p-2 rounded-xl text-left text-xs border-l-2 border-primary/50",
+                            isOwn ? "bg-primary/20" : "bg-muted/80"
+                          )}
+                        >
+                          <p className="font-medium text-primary/80 truncate">
+                            {msg.replyTo.sender?.username || "User"}
+                          </p>
+                          <p className="truncate text-muted-foreground">
+                            {msg.replyTo.isDeleted ? "This message was deleted" : msg.replyTo.content}
+                          </p>
+                        </button>
+                      )}
+
+                      {/* Attachments */}
+                      {msg.attachments?.length > 0 && !msg.isDeleted &&
                         msg.attachments.map((attachment, idx) => (
                           <div
                             key={idx}
                             className="mb-2 rounded-xl overflow-hidden"
                           >
-                            {attachment.type?.startsWith("image") && (
+                            {attachment.type === "image" ? (
                               <img
                                 src={attachment.url}
-                                alt="Shared"
-                                className="max-w-full h-auto"
+                                alt={attachment.fileName || "Shared"}
+                                className="max-w-full h-auto rounded-xl cursor-pointer hover:opacity-90 transition-opacity"
+                                onClick={() => window.open(attachment.url, "_blank")}
                               />
+                            ) : (
+                              <a
+                                href={attachment.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-3 p-3 rounded-xl bg-muted/30 hover:bg-muted/50 transition-colors"
+                              >
+                                <FileText className="h-8 w-8 text-primary shrink-0" />
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-sm font-medium truncate text-foreground">
+                                    {attachment.fileName || "File"}
+                                  </p>
+                                  {attachment.size && (
+                                    <p className="text-xs text-muted-foreground">
+                                      {(attachment.size / 1024).toFixed(1)} KB
+                                    </p>
+                                  )}
+                                </div>
+                                <Download className="h-4 w-4 text-muted-foreground shrink-0" />
+                              </a>
                             )}
                           </div>
                         ))}
+
+                      {/* Message bubble */}
                       <div
                         className={cn(
                           "px-4 py-2.5 rounded-2xl",
-                          msg.sender?._id === user?._id ||
-                            msg.sender === user?._id
-                            ? "bg-primary text-primary-foreground rounded-br-md"
-                            : "bg-muted rounded-bl-md"
+                          msg.isDeleted
+                            ? "bg-muted/50 italic"
+                            : isOwn
+                              ? "bg-primary text-primary-foreground rounded-br-md"
+                              : "bg-muted rounded-bl-md"
                         )}
                       >
                         <p className="text-sm whitespace-pre-wrap">
                           {msg.content}
                         </p>
                       </div>
+
+                      {/* Reactions display */}
+                      {msg.reactions?.length > 0 && (
+                        <div className={cn(
+                          "flex flex-wrap gap-1 mt-1",
+                          isOwn && "justify-end"
+                        )}>
+                          {msg.reactions.map((reaction, idx) => (
+                            <button
+                              key={idx}
+                              onClick={() => handleReaction(msg, reaction.emoji)}
+                              className={cn(
+                                "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border transition-colors",
+                                reaction.users?.some((u) => (u._id || u) === user?._id)
+                                  ? "border-primary/50 bg-primary/10"
+                                  : "border-border bg-card hover:bg-muted/50"
+                              )}
+                              title={`${reaction.users?.length || 0} reaction(s)`}
+                            >
+                              <span>{reaction.emoji}</span>
+                              {reaction.users?.length > 0 && (
+                                <span className="text-muted-foreground">{reaction.users.length}</span>
+                              )}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Timestamp + edited + read status */}
                       <div
                         className={cn(
                           "flex items-center gap-1 mt-1 text-xs text-muted-foreground",
-                          (msg.sender?._id === user?._id ||
-                            msg.sender === user?._id) &&
-                            "justify-end"
+                          isOwn && "justify-end"
                         )}
                       >
                         <span>{formatMessageTime(msg.createdAt)}</span>
-                        {(msg.sender?._id === user?._id ||
-                          msg.sender === user?._id) && (
+                        {msg.isEdited && !msg.isDeleted && (
+                          <span className="text-muted-foreground/70">(edited)</span>
+                        )}
+                        {isOwn && (
                           <span>
                             {msg.status === "read" ||
                             msg.readBy?.length > 0 ? (
@@ -469,7 +884,8 @@ const ChatArea = ({ chat, onToggleInfo, onBack, isMobile = false }) => {
                     </div>
                   </div>
                 </motion.div>
-              ))}
+                );
+              })}
             </div>
           ))}
         </AnimatePresence>
@@ -505,14 +921,156 @@ const ChatArea = ({ chat, onToggleInfo, onBack, isMobile = false }) => {
         <div ref={messagesEndRef} />
       </div>
 
+      {/* Context Menu */}
+      <AnimatePresence>
+        {contextMenu && (
+          <motion.div
+            ref={contextMenuRef}
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            className="fixed z-50 bg-card border border-border rounded-xl shadow-xl py-1 min-w-[160px]"
+            style={{ top: contextMenu.y, left: contextMenu.x }}
+          >
+            <button
+              onClick={() => startReply(contextMenu.message)}
+              className="w-full px-4 py-2 text-left text-sm flex items-center gap-2 hover:bg-muted/50 transition-colors"
+            >
+              <Reply className="h-4 w-4" /> Reply
+            </button>
+            {(contextMenu.message.sender?._id === user?._id || contextMenu.message.sender === user?._id) && (
+              <>
+                <button
+                  onClick={() => startEditMessage(contextMenu.message)}
+                  className="w-full px-4 py-2 text-left text-sm flex items-center gap-2 hover:bg-muted/50 transition-colors"
+                >
+                  <Pencil className="h-4 w-4" /> Edit
+                </button>
+                <button
+                  onClick={() => handleDeleteMessage(contextMenu.message)}
+                  className="w-full px-4 py-2 text-left text-sm flex items-center gap-2 hover:bg-muted/50 transition-colors text-destructive"
+                >
+                  <Trash2 className="h-4 w-4" /> Delete
+                </button>
+              </>
+            )}
+            <div className="border-t border-border my-1" />
+            <div className="px-3 py-1.5 flex items-center gap-1">
+              {quickReactions.map((emoji) => (
+                <button
+                  key={emoji}
+                  onClick={() => { handleReaction(contextMenu.message, emoji); setContextMenu(null); }}
+                  className="p-1.5 rounded hover:bg-muted/50 transition-colors text-base"
+                >
+                  {emoji}
+                </button>
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Reply Bar */}
+      <AnimatePresence>
+        {replyingTo && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="border-t border-border bg-card/50 overflow-hidden"
+          >
+            <div className="px-4 py-2 flex items-center gap-3">
+              <CornerUpRight className="h-4 w-4 text-primary shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium text-primary">
+                  Replying to {replyingTo.sender?.username || "User"}
+                </p>
+                <p className="text-xs text-muted-foreground truncate">
+                  {replyingTo.content || "Attachment"}
+                </p>
+              </div>
+              <button onClick={cancelReply} className="p-1 rounded hover:bg-muted/50">
+                <X className="h-4 w-4 text-muted-foreground" />
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Edit Bar */}
+      <AnimatePresence>
+        {editingMessage && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="border-t border-border bg-card/50 overflow-hidden"
+          >
+            <div className="px-4 py-2 flex items-center gap-3">
+              <Pencil className="h-4 w-4 text-amber-500 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium text-amber-500">Editing message</p>
+                <p className="text-xs text-muted-foreground truncate">
+                  {editingMessage.content}
+                </p>
+              </div>
+              <button onClick={cancelEdit} className="p-1 rounded hover:bg-muted/50">
+                <X className="h-4 w-4 text-muted-foreground" />
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* File Preview Bar */}
+      {filePreviews.length > 0 && (
+        <div className="px-4 py-2 border-t border-border bg-card/50 flex gap-2 overflow-x-auto">
+          {filePreviews.map((preview, index) => (
+            <div key={index} className="relative shrink-0 group">
+              {preview.type === "image" ? (
+                <img
+                  src={preview.url}
+                  alt={preview.file.name}
+                  className="h-16 w-16 object-cover rounded-lg border border-border"
+                />
+              ) : (
+                <div className="h-16 w-16 flex flex-col items-center justify-center rounded-lg border border-border bg-muted/50">
+                  <FileText className="h-6 w-6 text-muted-foreground" />
+                  <span className="text-[10px] text-muted-foreground truncate max-w-[56px] mt-0.5">
+                    {preview.file.name.split(".").pop()}
+                  </span>
+                </div>
+              )}
+              <button
+                onClick={() => removeFile(index)}
+                className="absolute -top-1.5 -right-1.5 p-0.5 rounded-full bg-destructive text-destructive-foreground opacity-0 group-hover:opacity-100 transition-opacity"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Input Area */}
       <div className="p-4 border-t border-border bg-card/50 backdrop-blur-sm">
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          accept="image/*,.pdf,.doc,.docx,.txt"
+          onChange={handleFileSelect}
+          className="hidden"
+        />
         <div className="flex items-center gap-2">
           <button
-            onClick={() => showComingSoon("File attachments")}
-            className="p-2.5 rounded-full hover:bg-muted/50 transition-colors"
+            onClick={() => fileInputRef.current?.click()}
+            className={cn(
+              "p-2.5 rounded-full hover:bg-muted/50 transition-colors",
+              selectedFiles.length > 0 && "text-primary"
+            )}
           >
-            <Paperclip className="h-5 w-5 text-muted-foreground" />
+            <Paperclip className="h-5 w-5" />
           </button>
           <div className="flex-1 relative">
             <input
@@ -568,10 +1126,10 @@ const ChatArea = ({ chat, onToggleInfo, onBack, isMobile = false }) => {
           </div>
           <motion.button
             onClick={handleSend}
-            disabled={!message.trim() || isSending}
+            disabled={(!message.trim() && selectedFiles.length === 0) || isSending}
             className={cn(
               "p-2.5 rounded-full transition-colors",
-              message.trim() && !isSending
+              (message.trim() || selectedFiles.length > 0) && !isSending
                 ? "bg-primary text-primary-foreground"
                 : "bg-muted text-muted-foreground"
             )}

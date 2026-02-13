@@ -1,6 +1,12 @@
 import { io } from "socket.io-client";
 import { store } from "../store/store";
-import { addMessage, updateMessageStatus } from "../store/slices/messageSlice";
+import {
+  addMessage,
+  updateMessageStatus,
+  updateEditedMessage,
+  updateDeletedMessage,
+  updateReactions,
+} from "../store/slices/messageSlice";
 import {
   updateChatLastMessage,
   incrementUnreadCount,
@@ -8,6 +14,11 @@ import {
   removeChat,
   updateChat,
 } from "../store/slices/chatSlice";
+import {
+  addReceivedRequest,
+  friendRequestAccepted,
+  friendRemoved,
+} from "../store/slices/friendSlice";
 import authService from "./authService";
 
 class SocketService {
@@ -173,6 +184,21 @@ class SocketService {
       window.dispatchEvent(event);
     });
 
+    // Message edited
+    this.socket.on("message:edited", (data) => {
+      store.dispatch(updateEditedMessage(data));
+    });
+
+    // Message deleted
+    this.socket.on("message:deleted", (data) => {
+      store.dispatch(updateDeletedMessage(data));
+    });
+
+    // Message reaction toggled
+    this.socket.on("message:reacted", (data) => {
+      store.dispatch(updateReactions(data));
+    });
+
     // Read receipts
     this.socket.on("messages:read", (data) => {
       const { chatId } = data;
@@ -192,6 +218,19 @@ class SocketService {
         detail: { ...data, status: "offline" }
       });
       window.dispatchEvent(event);
+    });
+
+    // Friend events
+    this.socket.on("friend:request", (data) => {
+      store.dispatch(addReceivedRequest(data.request));
+    });
+
+    this.socket.on("friend:accepted", (data) => {
+      store.dispatch(friendRequestAccepted(data));
+    });
+
+    this.socket.on("friend:removed", (data) => {
+      store.dispatch(friendRemoved(data));
     });
   }
 

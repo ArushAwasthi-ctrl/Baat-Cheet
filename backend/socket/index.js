@@ -32,8 +32,8 @@ const emitToChat = async (io, chatId, event, data, excludeUserId = null) => {
       }
       emitToUser(io, participantIdStr, event, data);
     });
-  } catch {
-    // Silently fail - chat may have been deleted
+  } catch (err) {
+    console.error(`[Socket] emitToChat error for chat ${chatId}:`, err);
   }
 };
 
@@ -141,111 +141,150 @@ const initializeSocket = (server) => {
 
     // Handle joining a specific chat room
     socket.on("chat:join", (chatId) => {
-      socket.join(`chat:${chatId}`);
+      try {
+        socket.join(`chat:${chatId}`);
+      } catch (err) {
+        console.error(`[Socket] chat:join error for user ${userId}:`, err);
+      }
     });
 
     // Handle leaving a chat room
     socket.on("chat:leave", (chatId) => {
-      socket.leave(`chat:${chatId}`);
+      try {
+        socket.leave(`chat:${chatId}`);
+      } catch (err) {
+        console.error(`[Socket] chat:leave error for user ${userId}:`, err);
+      }
     });
 
     // Handle new message
     socket.on("message:send", async (data) => {
-      const { chatId, message } = data;
+      try {
+        const { chatId, message } = data;
 
-      // Emit to all participants in the chat (except sender)
-      socket.to(`chat:${chatId}`).emit("message:new", {
-        chatId,
-        message,
-      });
+        // Emit to all participants in the chat (except sender)
+        socket.to(`chat:${chatId}`).emit("message:new", {
+          chatId,
+          message,
+        });
 
-      // Also emit chat update for sidebar
-      socket.to(`chat:${chatId}`).emit("chat:update", {
-        chatId,
-        lastMessage: message,
-      });
+        // Also emit chat update for sidebar
+        socket.to(`chat:${chatId}`).emit("chat:update", {
+          chatId,
+          lastMessage: message,
+        });
+      } catch (err) {
+        console.error(`[Socket] message:send error for user ${userId}:`, err);
+      }
     });
 
     // Handle typing indicator
     socket.on("typing:start", async (data) => {
-      const { chatId } = data;
-      socket.to(`chat:${chatId}`).emit("typing:start", {
-        chatId,
-        userId,
-        username: socket.user.username,
-      });
+      try {
+        const { chatId } = data;
+        socket.to(`chat:${chatId}`).emit("typing:start", {
+          chatId,
+          userId,
+          username: socket.user.username,
+        });
+      } catch (err) {
+        console.error(`[Socket] typing:start error for user ${userId}:`, err);
+      }
     });
 
     socket.on("typing:stop", async (data) => {
-      const { chatId } = data;
-      socket.to(`chat:${chatId}`).emit("typing:stop", {
-        chatId,
-        userId,
-      });
+      try {
+        const { chatId } = data;
+        socket.to(`chat:${chatId}`).emit("typing:stop", {
+          chatId,
+          userId,
+        });
+      } catch (err) {
+        console.error(`[Socket] typing:stop error for user ${userId}:`, err);
+      }
     });
 
     // Handle message read
     socket.on("message:read", async (data) => {
-      const { chatId, messageId } = data;
-      socket.to(`chat:${chatId}`).emit("message:read", {
-        chatId,
-        messageId,
-        readBy: userId,
-      });
+      try {
+        const { chatId, messageId } = data;
+        socket.to(`chat:${chatId}`).emit("message:read", {
+          chatId,
+          messageId,
+          readBy: userId,
+        });
+      } catch (err) {
+        console.error(`[Socket] message:read error for user ${userId}:`, err);
+      }
     });
 
     // Handle new chat created
     socket.on("chat:created", async (data) => {
-      const { chat } = data;
-      // Notify all participants to join the new chat room
-      chat.participants.forEach((participantId) => {
-        const participantIdStr = participantId._id || participantId;
-        emitToUser(io, participantIdStr.toString(), "chat:new", { chat });
-      });
+      try {
+        const { chat } = data;
+        // Notify all participants to join the new chat room
+        chat.participants.forEach((participantId) => {
+          const participantIdStr = participantId._id || participantId;
+          emitToUser(io, participantIdStr.toString(), "chat:new", { chat });
+        });
+      } catch (err) {
+        console.error(`[Socket] chat:created error for user ${userId}:`, err);
+      }
     });
 
     // Handle group updates (members added/removed, info changed)
     socket.on("group:updated", async (data) => {
-      const { chatId, chat, action } = data;
-      socket.to(`chat:${chatId}`).emit("group:updated", {
-        chatId,
-        chat,
-        action, // 'memberAdded', 'memberRemoved', 'infoUpdated', 'adminPromoted'
-      });
+      try {
+        const { chatId, chat, action } = data;
+        socket.to(`chat:${chatId}`).emit("group:updated", {
+          chatId,
+          chat,
+          action, // 'memberAdded', 'memberRemoved', 'infoUpdated', 'adminPromoted'
+        });
+      } catch (err) {
+        console.error(`[Socket] group:updated error for user ${userId}:`, err);
+      }
     });
 
     // Handle user coming back online (reconnection)
     socket.on("user:active", () => {
-      socket.broadcast.emit("user:online", {
-        userId,
-        status: "online",
-      });
+      try {
+        socket.broadcast.emit("user:online", {
+          userId,
+          status: "online",
+        });
+      } catch (err) {
+        console.error(`[Socket] user:active error for user ${userId}:`, err);
+      }
     });
 
     // ==================== DISCONNECT HANDLER ====================
 
     socket.on("disconnect", async () => {
+      try {
+        // Remove this socket from user's connections
+        const sockets = userSockets.get(userId);
+        if (sockets) {
+          sockets.delete(socket.id);
+          if (sockets.size === 0) {
+            userSockets.delete(userId);
 
-      // Remove this socket from user's connections
-      const sockets = userSockets.get(userId);
-      if (sockets) {
-        sockets.delete(socket.id);
-        if (sockets.size === 0) {
-          userSockets.delete(userId);
+            // Only update status if user has no more active connections
+            await User.findByIdAndUpdate(userId, {
+              status: "offline",
+              lastSeen: new Date(),
+            });
 
-          // Only update status if user has no more active connections
-          await User.findByIdAndUpdate(userId, {
-            status: "offline",
-            lastSeen: new Date(),
-          });
-
-          // Broadcast offline status
-          socket.broadcast.emit("user:offline", {
-            userId,
-            status: "offline",
-            lastSeen: new Date(),
-          });
+            // Broadcast offline status
+            socket.broadcast.emit("user:offline", {
+              userId,
+              status: "offline",
+              lastSeen: new Date(),
+            });
+          }
         }
+      } catch (err) {
+        console.error(`[Socket] disconnect error for user ${userId}:`, err);
       }
     });
   });

@@ -171,7 +171,13 @@ const sendMessageValidator = () => {
       .optional()
       .trim()
       .isLength({ max: 5000 })
-      .withMessage("Content must be at most 5000 characters"),
+      .withMessage("Content must be at most 5000 characters")
+      .custom((value) => {
+        if (value !== undefined && value.trim().length === 0) {
+          throw new Error("Content cannot be empty or whitespace only");
+        }
+        return true;
+      }),
     body("attachments")
       .optional()
       .isArray()
@@ -290,6 +296,92 @@ const promoteToAdminValidator = () => {
   ];
 };
 
+// ==================== FRIEND VALIDATORS ====================
+
+const friendRequestValidator = () => {
+  return [
+    body("userId")
+      .trim()
+      .notEmpty()
+      .withMessage("userId is required")
+      .isMongoId()
+      .withMessage("userId must be a valid Mongo ID"),
+  ];
+};
+
+const friendRequestIdValidator = () => {
+  return [
+    param("requestId")
+      .trim()
+      .isMongoId()
+      .withMessage("requestId must be a valid Mongo ID"),
+  ];
+};
+
+const friendUserIdValidator = () => {
+  return [
+    param("userId")
+      .trim()
+      .isMongoId()
+      .withMessage("userId must be a valid Mongo ID"),
+  ];
+};
+
+// ==================== MESSAGE EDIT/DELETE/REACTION/SEARCH VALIDATORS ====================
+
+const editMessageValidator = () => {
+  return [
+    param("messageId")
+      .trim()
+      .isMongoId()
+      .withMessage("messageId must be a valid Mongo ID"),
+    body("content")
+      .trim()
+      .notEmpty()
+      .withMessage("Content is required")
+      .isLength({ max: 5000 })
+      .withMessage("Content must be at most 5000 characters"),
+  ];
+};
+
+const deleteMessageValidator = () => {
+  return [
+    param("messageId")
+      .trim()
+      .isMongoId()
+      .withMessage("messageId must be a valid Mongo ID"),
+  ];
+};
+
+const reactionValidator = () => {
+  return [
+    param("messageId")
+      .trim()
+      .isMongoId()
+      .withMessage("messageId must be a valid Mongo ID"),
+    body("emoji")
+      .trim()
+      .notEmpty()
+      .withMessage("Emoji is required"),
+  ];
+};
+
+const searchMessagesValidator = () => {
+  return [
+    query("q")
+      .trim()
+      .notEmpty()
+      .withMessage("Search query is required")
+      .isLength({ max: 200 })
+      .withMessage("Search query too long"),
+    query("cursor").optional().isMongoId().withMessage("Invalid cursor"),
+    query("limit")
+      .optional()
+      .isInt({ min: 1, max: 50 })
+      .withMessage("limit must be between 1 and 50"),
+  ];
+};
+
 export {
   userRegisterValidator,
   userLoginValidator,
@@ -307,4 +399,11 @@ export {
   addMemberValidator,
   removeMemberValidator,
   promoteToAdminValidator,
+  friendRequestValidator,
+  friendRequestIdValidator,
+  friendUserIdValidator,
+  editMessageValidator,
+  deleteMessageValidator,
+  reactionValidator,
+  searchMessagesValidator,
 };

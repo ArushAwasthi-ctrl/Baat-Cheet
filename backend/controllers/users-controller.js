@@ -2,6 +2,7 @@ import mongoose, { Types } from "mongoose";
 import User from "../models/Users.js";
 import Chat from "../models/Chats.js";
 import Message from "../models/Messages.js";
+import BlockedUser from "../models/BlockedUser.js";
 import ApiError from "../utils/api-error.js";
 import ApiResponse from "../utils/api-response.js";
 import asyncHandler from "../utils/asyncHandler.js";
@@ -11,6 +12,7 @@ import {
   LIST_USER_PROJECTION,
 } from "../constants/projections.js";
 import { redisClient } from "../redis/redisClient.js";
+import { sanitize } from "../utils/sanitize.js";
 
 // Cookie options for clearing (must match auth-controller settings)
 const isProd = process.env.NODE_ENV === "production";
@@ -60,11 +62,19 @@ const getAllUsers = asyncHandler(async (req, res) => {
 
 // Build Filter Object (cleaner + faster)
   
+  // Get users blocked by current user to exclude from search
+  const blockedByMe = await BlockedUser.find({ blocker: currentUser._id })
+    .select("blocked")
+    .lean();
+  const blockedIds = blockedByMe.map((b) => b.blocked);
+
+  const idFilter = { $ne: currentUser._id, $nin: blockedIds };
+  if (cursor && Types.ObjectId.isValid(cursor)) {
+    idFilter.$gt = new Types.ObjectId(cursor);
+  }
+
   const filter = {
-    _id: { $ne: currentUser._id },
-    ...(cursor && Types.ObjectId.isValid(cursor)
-      ? { _id: { $gt: new Types.ObjectId(cursor) } }
-      : {}),
+    _id: idFilter,
     ...(search
       ? {
           $or: [
@@ -137,14 +147,25 @@ const updateProfile = asyncHandler(async (req, res) => {
 
   const { username, bio, avatar } = req.body;
 
-  // Build the update object only with provided fields
+  // Build the update object only with provided fields (sanitize text inputs)
   const update = {};
-  if (username !== undefined) update.username = username;
-  if (bio !== undefined) update.bio = bio;
+  if (username !== undefined) update.username = sanitize(username);
+  if (bio !== undefined) update.bio = sanitize(bio);
   if (avatar !== undefined) update.avatar = avatar;
 
   if (Object.keys(update).length === 0) {
     throw new ApiError(400, "No profile fields provided to update");
+  }
+
+  // Check username uniqueness if username is being updated
+  if (username !== undefined) {
+    const existingUser = await User.findOne({
+      username,
+      _id: { $ne: userId },
+    }).lean();
+    if (existingUser) {
+      throw new ApiError(409, "Username is already taken");
+    }
   }
 
   const updatedUser = await User.findByIdAndUpdate(
@@ -214,4 +235,97 @@ const deleteAccount = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, null, "Account deleted successfully"));
 });
 
-export { getCurrentUser, getAllUsers, getIndividualUser, updateProfile, deleteAccount };
+//---------------------------------------------------------
+// BLOCK A USER
+//---------------------------------------------------------
+const blockUser = asyncHandler(async (req, res) => {
+  const userId = req.user._id;
+  const { userId: targetId } = req.params;
+
+  if (!Types.ObjectId.isValid(targetId)) {
+    throw new ApiError(400, "Invalid user ID format");
+  }
+
+  if (userId.toString() === targetId) {
+    throw new ApiError(400, "You cannot block yourself");
+  }
+
+  const targetUser = await User.findById(targetId).lean();
+  if (!targetUser) {
+    throw new ApiError(404, "User not found");
+  }
+
+  // Check if already blocked
+  const existing = await BlockedUser.findOne({
+    blocker: userId,
+    blocked: targetId,
+  }).lean();
+
+  if (existing) {
+    throw new ApiError(409, "User is already blocked");
+  }
+
+  await BlockedUser.create({ blocker: userId, blocked: targetId });
+
+  // Also remove from friends if they were friends
+  await User.findByIdAndUpdate(userId, { $pull: { friends: targetId } });
+  await User.findByIdAndUpdate(targetId, { $pull: { friends: userId } });
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, null, "User blocked successfully"));
+});
+
+//---------------------------------------------------------
+// UNBLOCK A USER
+//---------------------------------------------------------
+const unblockUser = asyncHandler(async (req, res) => {
+  const userId = req.user._id;
+  const { userId: targetId } = req.params;
+
+  if (!Types.ObjectId.isValid(targetId)) {
+    throw new ApiError(400, "Invalid user ID format");
+  }
+
+  const result = await BlockedUser.findOneAndDelete({
+    blocker: userId,
+    blocked: targetId,
+  });
+
+  if (!result) {
+    throw new ApiError(404, "User is not blocked");
+  }
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, null, "User unblocked successfully"));
+});
+
+//---------------------------------------------------------
+// GET BLOCKED USERS
+//---------------------------------------------------------
+const getBlockedUsers = asyncHandler(async (req, res) => {
+  const userId = req.user._id;
+
+  const blockedList = await BlockedUser.find({ blocker: userId })
+    .populate("blocked", "_id username avatar")
+    .sort({ createdAt: -1 })
+    .lean();
+
+  const users = blockedList.map((b) => b.blocked);
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, { users }, "Blocked users fetched"));
+});
+
+export {
+  getCurrentUser,
+  getAllUsers,
+  getIndividualUser,
+  updateProfile,
+  deleteAccount,
+  blockUser,
+  unblockUser,
+  getBlockedUsers,
+};

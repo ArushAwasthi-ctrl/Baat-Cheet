@@ -38,6 +38,24 @@ const userService = {
     const response = await api.delete("/api/users/me");
     return response.data;
   },
+
+  // Block a user
+  blockUser: async (userId) => {
+    const response = await api.post(`/api/users/block/${userId}`);
+    return response.data;
+  },
+
+  // Unblock a user
+  unblockUser: async (userId) => {
+    const response = await api.delete(`/api/users/block/${userId}`);
+    return response.data;
+  },
+
+  // Get blocked users
+  getBlockedUsers: async () => {
+    const response = await api.get("/api/users/blocked");
+    return response.data;
+  },
 };
 
 export default userService;

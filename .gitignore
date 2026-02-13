@@ -39,3 +39,7 @@ coverage/
 
 # Docker volumes
 redis-data/
+INTERVIEW_QUESTIONS.md
+PROBLEM_STATEMENT.md
+STRATEGIC_PLAN.md
+ROADMAP.md

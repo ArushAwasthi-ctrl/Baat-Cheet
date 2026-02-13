@@ -21,6 +21,7 @@ import {
 } from "../controllers/auth-controller.js";
 
 import authValidator from "../middlewares/auth-middleware.js";
+import { sensitiveOpLimiter } from "../middlewares/rate-limiter.js";
 
 const Authrouter = new Router();
 
@@ -50,6 +51,7 @@ Authrouter.route("/refresh").post(refreshToken);
 
 // Forgot Password
 Authrouter.route("/forgotpassword").post(
+  sensitiveOpLimiter,
   userForgotPasswordValidator(),
   validate,
   forgotPassword,

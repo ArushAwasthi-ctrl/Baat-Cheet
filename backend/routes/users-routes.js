@@ -6,16 +6,23 @@ import {
   getIndividualUser,
   updateProfile,
   deleteAccount,
+  blockUser,
+  unblockUser,
+  getBlockedUsers,
 } from "../controllers/users-controller.js";
-import { userUpdateProfileValidator } from "../validators/validate.js";
+import {
+  userUpdateProfileValidator,
+  friendUserIdValidator,
+} from "../validators/validate.js";
 import validate from "../middlewares/validator-middleware.js";
+import { sensitiveOpLimiter } from "../middlewares/rate-limiter.js";
 const UserRouter = Router();
 
 // GET current logged-in user
 UserRouter.route("/me").get(authValidator, getCurrentUser);
 
 // DELETE current user account
-UserRouter.route("/me").delete(authValidator, deleteAccount);
+UserRouter.route("/me").delete(authValidator, sensitiveOpLimiter, deleteAccount);
 
 // GET all users (search + pagination)
 UserRouter.route("/").get(authValidator, getAllUsers);
@@ -30,6 +37,25 @@ UserRouter.route("/profile").put(
   validate,
   updateProfile,
 );
+
+// Block / Unblock
+UserRouter.post(
+  "/block/:userId",
+  authValidator,
+  friendUserIdValidator(),
+  validate,
+  blockUser
+);
+
+UserRouter.delete(
+  "/block/:userId",
+  authValidator,
+  friendUserIdValidator(),
+  validate,
+  unblockUser
+);
+
+UserRouter.get("/blocked", authValidator, getBlockedUsers);
 
 // EXPORT AT THE END
 export default UserRouter;

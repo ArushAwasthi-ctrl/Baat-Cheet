@@ -40,12 +40,46 @@ const MessageSchema = new mongoose.Schema(
       ref: "User",
       default: [],
     },
+    // Edit & delete tracking
+    isEdited: {
+      type: Boolean,
+      default: false,
+    },
+    isDeleted: {
+      type: Boolean,
+      default: false,
+    },
+    editedAt: {
+      type: Date,
+    },
+    originalContent: {
+      type: String,
+    },
+    // Reply reference
+    replyTo: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Message",
+      default: null,
+    },
+    // Emoji reactions
+    reactions: [
+      {
+        emoji: { type: String, required: true },
+        users: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+      },
+    ],
   },
   { timestamps: true },
 );
 
 // Index on chat + createdAt for fast pagination when loading messages in a chat
 MessageSchema.index({ chat: 1, createdAt: -1 });
+// Text index for message search
+MessageSchema.index({ content: "text" });
+// Index for sender lookups
+MessageSchema.index({ sender: 1, chat: 1 });
+// Index for unread message queries (readBy + chat)
+MessageSchema.index({ chat: 1, readBy: 1 });
 
 const Message = mongoose.model("Message", MessageSchema);
 export default Message;

@@ -5,6 +5,7 @@ import ApiResponse from "../utils/api-response.js";
 import asyncHandler from "../utils/asyncHandler.js";
 import { Types } from "mongoose";
 import { CHAT_PARTICIPANT_PROJECTION } from "../constants/projections.js";
+import { sanitize } from "../utils/sanitize.js";
 
 const MAX_CHAT_LIMIT = 50;
 
@@ -83,7 +84,7 @@ const createorGetGroupChat = asyncHandler(async (req, res) => {
   const currentId = req.user._id;
   const currentIdStr = currentId.toString();
   const { name, participants } = req.body;
-  const trimmedName = name.trim();
+  const trimmedName = sanitize(name.trim());
 
   // Remove duplicates + include current user
   const normalizedParticipants = participants
@@ -253,7 +254,7 @@ const updateGroupInfo = asyncHandler(async (req, res) => {
   if (!isAdmin) throw new ApiError(403, "Only admins can update group");
 
   const update = {};
-  if (typeof name === "string" && name.trim()) update.name = name.trim();
+  if (typeof name === "string" && name.trim()) update.name = sanitize(name.trim());
   if (typeof avatar === "string" && avatar.trim())
     update.avatar = avatar.trim();
 
