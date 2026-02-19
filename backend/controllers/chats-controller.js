@@ -49,12 +49,12 @@ const createOrGetDirectChat = asyncHandler(async (req, res) => {
     participants: { $all: [currentId, userId], $size: 2 },
   })
     .populate("participants", CHAT_PARTICIPANT_PROJECTION)
-    .lean();
+    .lean({ virtuals: true });
 
   if (chatData) {
     return res
       .status(200)
-      .json(new ApiResponse(200, chatData, "Direct chat found successfully"));
+      .json(new ApiResponse(200, { chat: chatData }, "Direct chat found successfully"));
   }
 
   // Create new direct chat
@@ -65,7 +65,7 @@ const createOrGetDirectChat = asyncHandler(async (req, res) => {
 
   const populatedChat = await Chat.findById(newChat._id)
     .populate("participants", CHAT_PARTICIPANT_PROJECTION)
-    .lean();
+    .lean({ virtuals: true });
 
   // Emit socket event to the other user about new chat
   emitToUser(req, userId, "chat:new", { chat: populatedChat });
@@ -83,7 +83,7 @@ const createOrGetDirectChat = asyncHandler(async (req, res) => {
 const createorGetGroupChat = asyncHandler(async (req, res) => {
   const currentId = req.user._id;
   const currentIdStr = currentId.toString();
-  const { name, participants } = req.body;
+  const { name, description, participants } = req.body;
   const trimmedName = sanitize(name.trim());
 
   // Remove duplicates + include current user
@@ -105,7 +105,7 @@ const createorGetGroupChat = asyncHandler(async (req, res) => {
   }
 
   // Verify all participants exist in the database
-  const existingUsers = await User.find({ _id: { $in: uniqueParticipantIds } }).select("_id").lean();
+  const existingUsers = await User.find({ _id: { $in: uniqueParticipantIds } }).select("_id").lean({ virtuals: true });
   const existingUserIds = existingUsers.map((u) => u._id.toString());
   const nonExistentIds = uniqueParticipantIds.filter((id) => !existingUserIds.includes(id));
   if (nonExistentIds.length > 0) {
@@ -122,12 +122,12 @@ const createorGetGroupChat = asyncHandler(async (req, res) => {
     type: "group",
     name: trimmedName,
     admins: currentId,
-  }).lean();
+  }).lean({ virtuals: true });
 
   if (existing) {
     const populatedExisting = await Chat.findById(existing._id)
       .populate("participants", CHAT_PARTICIPANT_PROJECTION)
-      .lean();
+      .lean({ virtuals: true });
     return res
       .status(200)
       .json(
@@ -138,6 +138,7 @@ const createorGetGroupChat = asyncHandler(async (req, res) => {
   const newGroup = await Chat.create({
     type: "group",
     name: trimmedName,
+    ...(description && { description: sanitize(description.trim()) }),
     participants: finalParticipants,
     admins: [currentId],
   });
@@ -145,7 +146,7 @@ const createorGetGroupChat = asyncHandler(async (req, res) => {
   const populatedGroup = await Chat.findById(newGroup._id)
     .populate("participants", CHAT_PARTICIPANT_PROJECTION)
     .populate("admins", "_id username avatar")
-    .lean();
+    .lean({ virtuals: true });
 
   // Emit socket event to all participants about new group
   uniqueParticipantIds.forEach((participantId) => {
@@ -173,7 +174,7 @@ const getChatById = asyncHandler(async (req, res) => {
     .populate("participants", CHAT_PARTICIPANT_PROJECTION)
     .populate("admins", "_id username avatar")
     .populate("lastMessage")
-    .lean();
+    .lean({ virtuals: true });
 
   if (!chat) throw new ApiError(404, "Chat does not exist");
   const isParticipant = chat.participants.some(
@@ -210,7 +211,7 @@ const getUserChats = asyncHandler(async (req, res) => {
     .sort({ lastMessageAt: -1 })
     .limit(parsedLimit)
     .populate("participants", CHAT_PARTICIPANT_PROJECTION)
-    .lean();
+    .lean({ virtuals: true });
 
   const hasMore = chats.length === parsedLimit;
   const lastChat = chats[chats.length - 1];
@@ -269,7 +270,7 @@ const updateGroupInfo = asyncHandler(async (req, res) => {
   )
     .populate("participants", "_id username avatar status lastSeen")
     .populate("admins", "_id username avatar")
-    .lean();
+    .lean({ virtuals: true });
 
   // Emit socket event to all participants about group update
   emitSocketEvent(req, `chat:${chatId}`, "group:updated", {
@@ -315,7 +316,7 @@ const addMembers = asyncHandler(async (req, res) => {
   }
 
   // Verify all users exist in the database
-  const existingUsers = await User.find({ _id: { $in: uniqueIds } }).select("_id").lean();
+  const existingUsers = await User.find({ _id: { $in: uniqueIds } }).select("_id").lean({ virtuals: true });
   const existingUserIds = existingUsers.map((u) => u._id.toString());
   const nonExistentIds = uniqueIds.filter((id) => !existingUserIds.includes(id));
   if (nonExistentIds.length > 0) {
@@ -330,7 +331,7 @@ const addMembers = asyncHandler(async (req, res) => {
     const populated = await Chat.findById(chatId)
       .populate("participants", CHAT_PARTICIPANT_PROJECTION)
       .populate("admins", "_id username avatar")
-      .lean();
+      .lean({ virtuals: true });
 
     return res
       .status(200)
@@ -352,7 +353,7 @@ const addMembers = asyncHandler(async (req, res) => {
   )
     .populate("participants", CHAT_PARTICIPANT_PROJECTION)
     .populate("admins", "_id username avatar")
-    .lean();
+    .lean({ virtuals: true });
 
   // Emit socket event to existing participants
   emitSocketEvent(req, `chat:${chatId}`, "group:updated", {
@@ -427,7 +428,7 @@ const removeMembers = asyncHandler(async (req, res) => {
   )
     .populate("participants", CHAT_PARTICIPANT_PROJECTION)
     .populate("admins", "_id username avatar")
-    .lean();
+    .lean({ virtuals: true });
 
   // Emit socket event to remaining participants
   emitSocketEvent(req, `chat:${chatId}`, "group:updated", {
@@ -493,7 +494,7 @@ const promoteToAdmin = asyncHandler(async (req, res) => {
   )
     .populate("participants", CHAT_PARTICIPANT_PROJECTION)
     .populate("admins", "_id username avatar")
-    .lean();
+    .lean({ virtuals: true });
 
   // Emit socket event to all participants
   emitSocketEvent(req, `chat:${chatId}`, "group:updated", {
@@ -557,7 +558,7 @@ const leaveGroup = asyncHandler(async (req, res) => {
   )
     .populate("participants", CHAT_PARTICIPANT_PROJECTION)
     .populate("admins", "_id username avatar")
-    .lean();
+    .lean({ virtuals: true });
 
   // If no participants left, delete the chat
   if (updatedChat.participants.length === 0) {

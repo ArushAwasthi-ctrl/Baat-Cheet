@@ -438,7 +438,7 @@ const ChatSidebar = ({ selectedChat, onSelectChat }) => {
 
   // Helper to get chat display name
   const getChatDisplayName = (chat) => {
-    if (chat.isGroup) {
+    if (chat.type === "group") {
       return chat.name;
     }
     // For direct chats, find the other participant
@@ -450,7 +450,7 @@ const ChatSidebar = ({ selectedChat, onSelectChat }) => {
 
   // Helper to get chat avatar
   const getChatAvatar = (chat) => {
-    if (chat.isGroup) {
+    if (chat.type === "group") {
       return chat.avatar || null;
     }
     const otherParticipant = chat.participants?.find(
@@ -461,7 +461,7 @@ const ChatSidebar = ({ selectedChat, onSelectChat }) => {
 
   // Helper to check if other user is online (for direct chats)
   const isOtherUserOnline = (chat) => {
-    if (chat.isGroup) return false;
+    if (chat.type === "group") return false;
     const otherParticipant = chat.participants?.find(
       (p) => p._id !== user?._id
     );
@@ -477,7 +477,7 @@ const ChatSidebar = ({ selectedChat, onSelectChat }) => {
     const msg = chat.lastMessage;
     const senderName =
       msg.sender?._id === user?._id ? "You" : msg.sender?.username || "";
-    const prefix = chat.isGroup && senderName ? `${senderName}: ` : "";
+    const prefix = chat.type === "group" && senderName ? `${senderName}: ` : "";
     return `${prefix}${msg.content || ""}`;
   };
 
@@ -492,7 +492,7 @@ const ChatSidebar = ({ selectedChat, onSelectChat }) => {
       const matchesFilter =
         filter === "all" ||
         (filter === "unread" && (chat.unreadCount || 0) > 0) ||
-        (filter === "groups" && chat.isGroup);
+        (filter === "groups" && chat.type === "group");
       return matchesSearch && matchesFilter;
     });
   }, [chats, searchQuery, filter, user?._id, getChatDisplayName]);

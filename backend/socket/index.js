@@ -140,8 +140,11 @@ const initializeSocket = (server) => {
     // ==================== EVENT HANDLERS ====================
 
     // Handle joining a specific chat room
-    socket.on("chat:join", (chatId) => {
+    socket.on("chat:join", async (chatId) => {
       try {
+        if (!chatId) return;
+        const isMember = await Chat.exists({ _id: chatId, participants: userId });
+        if (!isMember) return;
         socket.join(`chat:${chatId}`);
       } catch (err) {
         console.error(`[Socket] chat:join error for user ${userId}:`, err);

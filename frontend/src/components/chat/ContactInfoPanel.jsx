@@ -34,7 +34,7 @@ const ContactInfoPanel = ({ chat, onClose, onBack, isMobile = false }) => {
 
   // Helper to get display name
   const getDisplayName = () => {
-    if (chat.isGroup) {
+    if (chat.type === "group") {
       return chat.name;
     }
     const otherParticipant = chat.participants?.find(
@@ -45,7 +45,7 @@ const ContactInfoPanel = ({ chat, onClose, onBack, isMobile = false }) => {
 
   // Helper to get avatar
   const getAvatar = () => {
-    if (chat.isGroup) {
+    if (chat.type === "group") {
       return chat.avatar || null;
     }
     const otherParticipant = chat.participants?.find(
@@ -56,7 +56,7 @@ const ContactInfoPanel = ({ chat, onClose, onBack, isMobile = false }) => {
 
   // Helper to check online status
   const isOnline = () => {
-    if (chat.isGroup) return false;
+    if (chat.type === "group") return false;
     const otherParticipant = chat.participants?.find(
       (p) => p._id !== user?._id
     );
@@ -65,7 +65,7 @@ const ContactInfoPanel = ({ chat, onClose, onBack, isMobile = false }) => {
 
   // Get other participant's bio (for direct chats)
   const getBio = () => {
-    if (chat.isGroup) {
+    if (chat.type === "group") {
       return chat.description || `${chat.participants?.length || 0} members`;
     }
     const otherParticipant = chat.participants?.find(
@@ -81,7 +81,7 @@ const ContactInfoPanel = ({ chat, onClose, onBack, isMobile = false }) => {
   ];
 
   // Check if current user is admin (for groups)
-  const isCurrentUserAdmin = chat.isGroup
+  const isCurrentUserAdmin = chat.type === "group"
     ? chat.admins?.some((a) => a._id === user?._id || a === user?._id)
     : false;
 
@@ -99,7 +99,7 @@ const ContactInfoPanel = ({ chat, onClose, onBack, isMobile = false }) => {
             </button>
           )}
           <h3 className="font-semibold text-foreground">
-            {chat.isGroup ? "Group Info" : "Contact Info"}
+            {chat.type === "group" ? "Group Info" : "Contact Info"}
           </h3>
         </div>
         <button
@@ -119,7 +119,7 @@ const ContactInfoPanel = ({ chat, onClose, onBack, isMobile = false }) => {
             animate={{ scale: 1, opacity: 1 }}
             className="relative inline-block"
           >
-            {chat.isGroup ? (
+            {chat.type === "group" ? (
               <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center">
                 <Users className="h-10 w-10 text-primary" />
               </div>
@@ -155,7 +155,7 @@ const ContactInfoPanel = ({ chat, onClose, onBack, isMobile = false }) => {
         </div>
 
         {/* Group Members Section (only for groups) */}
-        {chat.isGroup && chat.participants && (
+        {chat.type === "group" && chat.participants && (
           <div className="p-4 border-b border-border">
             <div className="flex items-center justify-between mb-3">
               <h4 className="font-medium text-foreground">
@@ -213,7 +213,7 @@ const ContactInfoPanel = ({ chat, onClose, onBack, isMobile = false }) => {
 
         {/* Danger Zone */}
         <div className="p-4 space-y-2">
-          {chat.isGroup ? (
+          {chat.type === "group" ? (
             <button
               onClick={async () => {
                 if (isLeaving) return;

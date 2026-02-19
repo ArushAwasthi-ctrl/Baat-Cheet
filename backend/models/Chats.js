@@ -18,6 +18,11 @@ const ChatSchema = new mongoose.Schema(
     avatar: {
       type: String,
     },
+    // Optional description for group chats
+    description: {
+      type: String,
+      trim: true,
+    },
     // All participants in the chat (for direct chats: exactly 2 users)
     participants: [
       {

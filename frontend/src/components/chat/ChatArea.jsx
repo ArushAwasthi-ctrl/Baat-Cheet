@@ -89,7 +89,7 @@ const ChatArea = ({ chat, onToggleInfo, onBack, isMobile = false }) => {
   // Helper to get chat display name
   const getChatDisplayName = () => {
     if (!chat) return "";
-    if (chat.isGroup) {
+    if (chat.type === "group") {
       return chat.name;
     }
     const otherParticipant = chat.participants?.find(
@@ -101,7 +101,7 @@ const ChatArea = ({ chat, onToggleInfo, onBack, isMobile = false }) => {
   // Helper to get chat avatar
   const getChatAvatar = () => {
     if (!chat) return null;
-    if (chat.isGroup) {
+    if (chat.type === "group") {
       return chat.avatar || null;
     }
     const otherParticipant = chat.participants?.find(
@@ -112,7 +112,7 @@ const ChatArea = ({ chat, onToggleInfo, onBack, isMobile = false }) => {
 
   // Helper to check if other user is online
   const isOtherUserOnline = () => {
-    if (!chat || chat.isGroup) return false;
+    if (!chat || chat.type === "group") return false;
     const otherParticipant = chat.participants?.find(
       (p) => p._id !== user?._id
     );
@@ -199,7 +199,9 @@ const ChatArea = ({ chat, onToggleInfo, onBack, isMobile = false }) => {
   const handleMessageContextMenu = (e, msg) => {
     e.preventDefault();
     if (msg.isDeleted) return;
-    setContextMenu({ x: e.clientX, y: e.clientY, message: msg });
+    const x = Math.min(e.clientX, window.innerWidth - 180);
+    const y = Math.min(e.clientY, window.innerHeight - 250);
+    setContextMenu({ x, y, message: msg });
   };
 
   // Start editing a message
@@ -705,7 +707,7 @@ const ChatArea = ({ chat, onToggleInfo, onBack, isMobile = false }) => {
                 >
                   <div
                     className={cn(
-                      "flex gap-2 max-w-[70%] relative",
+                      "flex gap-2 max-w-[85%] sm:max-w-[70%] relative",
                       isOwn && "flex-row-reverse"
                     )}
                   >
@@ -779,42 +781,69 @@ const ChatArea = ({ chat, onToggleInfo, onBack, isMobile = false }) => {
                       )}
 
                       {/* Attachments */}
-                      {msg.attachments?.length > 0 && !msg.isDeleted &&
-                        msg.attachments.map((attachment, idx) => (
-                          <div
-                            key={idx}
-                            className="mb-2 rounded-xl overflow-hidden"
-                          >
-                            {attachment.type === "image" ? (
-                              <img
-                                src={attachment.url}
-                                alt={attachment.fileName || "Shared"}
-                                className="max-w-full h-auto rounded-xl cursor-pointer hover:opacity-90 transition-opacity"
-                                onClick={() => window.open(attachment.url, "_blank")}
-                              />
-                            ) : (
-                              <a
-                                href={attachment.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="flex items-center gap-3 p-3 rounded-xl bg-muted/30 hover:bg-muted/50 transition-colors"
-                              >
-                                <FileText className="h-8 w-8 text-primary shrink-0" />
-                                <div className="min-w-0 flex-1">
-                                  <p className="text-sm font-medium truncate text-foreground">
-                                    {attachment.fileName || "File"}
-                                  </p>
-                                  {attachment.size && (
-                                    <p className="text-xs text-muted-foreground">
-                                      {(attachment.size / 1024).toFixed(1)} KB
-                                    </p>
-                                  )}
-                                </div>
-                                <Download className="h-4 w-4 text-muted-foreground shrink-0" />
-                              </a>
+                      {msg.attachments?.length > 0 && !msg.isDeleted && (() => {
+                        const images = msg.attachments.filter(a => a.type === "image");
+                        const files = msg.attachments.filter(a => a.type !== "image");
+                        const imageCount = images.length;
+
+                        return (
+                          <>
+                            {imageCount > 0 && (
+                              <div className={cn(
+                                "mb-2",
+                                imageCount === 1 ? "" : "grid grid-cols-2 gap-1"
+                              )}>
+                                {images.map((attachment, idx) => (
+                                  <div
+                                    key={idx}
+                                    className={cn(
+                                      "rounded-xl overflow-hidden",
+                                      imageCount >= 3 && idx === imageCount - 1 && imageCount % 2 !== 0
+                                        ? "col-span-2" : ""
+                                    )}
+                                  >
+                                    <img
+                                      src={attachment.url}
+                                      alt={attachment.fileName || "Shared"}
+                                      className={cn(
+                                        "w-full object-cover rounded-xl cursor-pointer hover:opacity-90 transition-opacity",
+                                        imageCount === 1 ? "max-h-[400px]" : "max-h-[200px]"
+                                      )}
+                                      onClick={() => window.open(attachment.url, "_blank")}
+                                    />
+                                  </div>
+                                ))}
+                              </div>
                             )}
-                          </div>
-                        ))}
+                            {files.map((attachment, idx) => (
+                              <div
+                                key={`file-${idx}`}
+                                className="mb-2 rounded-xl overflow-hidden"
+                              >
+                                <a
+                                  href={attachment.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="flex items-center gap-3 p-3 rounded-xl bg-muted/30 hover:bg-muted/50 transition-colors"
+                                >
+                                  <FileText className="h-8 w-8 text-primary shrink-0" />
+                                  <div className="min-w-0 flex-1">
+                                    <p className="text-sm font-medium truncate text-foreground">
+                                      {attachment.fileName || "File"}
+                                    </p>
+                                    {attachment.size && (
+                                      <p className="text-xs text-muted-foreground">
+                                        {(attachment.size / 1024).toFixed(1)} KB
+                                      </p>
+                                    )}
+                                  </div>
+                                  <Download className="h-4 w-4 text-muted-foreground shrink-0" />
+                                </a>
+                              </div>
+                            ))}
+                          </>
+                        );
+                      })()}
 
                       {/* Message bubble */}
                       <div
