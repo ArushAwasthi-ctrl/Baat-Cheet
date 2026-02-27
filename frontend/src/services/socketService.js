@@ -19,6 +19,15 @@ import {
   friendRequestAccepted,
   friendRemoved,
 } from "../store/slices/friendSlice";
+import {
+  appendSummaryChunk,
+  completeSummary,
+  setSummaryError,
+  setAiTyping,
+  appendAiChatChunk,
+  completeAiChat,
+  setAiChatError,
+} from "../store/slices/aiSlice";
 import authService from "./authService";
 
 class SocketService {
@@ -231,6 +240,42 @@ class SocketService {
 
     this.socket.on("friend:removed", (data) => {
       store.dispatch(friendRemoved(data));
+    });
+
+    // ==================== AI EVENTS ====================
+
+    // Summary streaming
+    this.socket.on("ai:summary:chunk", (data) => {
+      store.dispatch(appendSummaryChunk(data));
+    });
+
+    this.socket.on("ai:summary:complete", (data) => {
+      store.dispatch(completeSummary(data));
+    });
+
+    this.socket.on("ai:summary:error", (data) => {
+      store.dispatch(setSummaryError(data));
+    });
+
+    // AI chat streaming
+    this.socket.on("ai:typing:start", (data) => {
+      store.dispatch(setAiTyping({ chatId: data.chatId, isTyping: true }));
+    });
+
+    this.socket.on("ai:typing:stop", (data) => {
+      store.dispatch(setAiTyping({ chatId: data.chatId, isTyping: false }));
+    });
+
+    this.socket.on("ai:chat:chunk", (data) => {
+      store.dispatch(appendAiChatChunk(data));
+    });
+
+    this.socket.on("ai:chat:complete", (data) => {
+      store.dispatch(completeAiChat(data));
+    });
+
+    this.socket.on("ai:chat:error", (data) => {
+      store.dispatch(setAiChatError(data));
     });
   }
 

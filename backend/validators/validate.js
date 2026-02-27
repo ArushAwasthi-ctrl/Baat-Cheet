@@ -327,6 +327,36 @@ const friendUserIdValidator = () => {
   ];
 };
 
+// ==================== AI VALIDATORS ====================
+
+const summaryValidator = () => {
+  return [
+    body("chatId")
+      .trim()
+      .notEmpty()
+      .withMessage("chatId is required")
+      .isMongoId()
+      .withMessage("chatId must be a valid Mongo ID"),
+  ];
+};
+
+const aiChatValidator = () => {
+  return [
+    body("chatId")
+      .trim()
+      .notEmpty()
+      .withMessage("chatId is required")
+      .isMongoId()
+      .withMessage("chatId must be a valid Mongo ID"),
+    body("content")
+      .trim()
+      .notEmpty()
+      .withMessage("Message content is required")
+      .isLength({ max: 2000 })
+      .withMessage("Message must be at most 2000 characters"),
+  ];
+};
+
 // ==================== MESSAGE EDIT/DELETE/REACTION/SEARCH VALIDATORS ====================
 
 const editMessageValidator = () => {
@@ -406,4 +436,6 @@ export {
   deleteMessageValidator,
   reactionValidator,
   searchMessagesValidator,
+  summaryValidator,
+  aiChatValidator,
 };

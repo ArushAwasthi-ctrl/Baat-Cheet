@@ -8,6 +8,8 @@ import redisCall, { redisClient } from "./redis/redisClient.js";
 import { initializeSocket } from "./socket/index.js";
 // Start email worker in the same process (for Render deployment)
 import "./workers/email.worker.js";
+// Start AI worker in the same process (needs IO — set after socket init)
+import { setIO as setAiWorkerIO } from "./workers/ai.worker.js";
 
 // Build MongoDB URI (prefer full URI from env)
 const buildMongoUri = () => {
@@ -38,6 +40,7 @@ const startServer = async () => {
     // Initialize Socket.IO
     io = initializeSocket(server);
     app.set("io", io);
+    setAiWorkerIO(io);
     console.log("Socket.IO initialized");
 
     // Start HTTP server

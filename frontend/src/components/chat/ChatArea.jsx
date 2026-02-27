@@ -21,6 +21,7 @@ import {
   Trash2,
   Reply,
   CornerUpRight,
+  Sparkles,
 } from "lucide-react";
 import { cn, formatMessageTime } from "@/lib/utils";
 import Avatar from "@/components/ui/Avatar";
@@ -35,6 +36,7 @@ import {
 } from "@/store/slices/messageSlice";
 import messageService from "@/services/messageService";
 import { updateChatLastMessage } from "@/store/slices/chatSlice";
+import { requestSummary, clearSummary } from "@/store/slices/aiSlice";
 import { useTypingIndicator, useUserStatus } from "@/hooks/useSocket";
 import socketService from "@/services/socketService";
 import { toast } from "sonner";
@@ -85,6 +87,20 @@ const ChatArea = ({ chat, onToggleInfo, onBack, isMobile = false }) => {
   const messages = chat ? messagesByChat[chat._id] || [] : [];
   const isLoadingMessages = chat ? loadingByChat[chat._id] : false;
   const pagination = chat ? paginationByChat[chat._id] : null;
+
+  // AI state
+  const {
+    summariesByChat,
+    streamingByChat,
+    isRequestingSummary,
+    aiTypingByChat,
+    aiStreamByChat,
+  } = useSelector((state) => state.ai);
+  const currentSummary = chat ? summariesByChat[chat._id] : null;
+  const streamingSummary = chat ? streamingByChat[chat._id] : null;
+  const isAiTyping = chat ? aiTypingByChat[chat._id] : false;
+  const aiStreamText = chat ? aiStreamByChat[chat._id] : null;
+  const [showSummary, setShowSummary] = useState(false);
 
   // Helper to get chat display name
   const getChatDisplayName = () => {
@@ -292,6 +308,17 @@ const ChatArea = ({ chat, onToggleInfo, onBack, isMobile = false }) => {
       if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
     };
   }, [searchQuery, handleSearch]);
+
+  // Handle AI Catch-Up summary
+  const handleCatchUp = async () => {
+    if (!chat?._id) return;
+    setShowSummary(true);
+    try {
+      await dispatch(requestSummary({ chatId: chat._id })).unwrap();
+    } catch (err) {
+      toast.error(err || "Failed to generate summary");
+    }
+  };
 
   // Scroll to a specific message
   const scrollToMessage = (messageId) => {
@@ -579,6 +606,14 @@ const ChatArea = ({ chat, onToggleInfo, onBack, isMobile = false }) => {
             <Search className="h-5 w-5" />
           </button>
           <button
+            onClick={handleCatchUp}
+            disabled={isRequestingSummary}
+            className="p-2 rounded-lg hover:bg-muted/50 transition-colors"
+            title="Catch up on unread messages"
+          >
+            <Sparkles className={cn("h-5 w-5", isRequestingSummary && "animate-pulse text-primary")} />
+          </button>
+          <button
             className="p-2 rounded-lg hover:bg-muted/50 transition-colors"
             onClick={onToggleInfo}
           >
@@ -630,6 +665,37 @@ const ChatArea = ({ chat, onToggleInfo, onBack, isMobile = false }) => {
               {searchQuery && !isSearching && searchResults.length === 0 && (
                 <p className="text-xs text-muted-foreground mt-2 text-center">No results found</p>
               )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* AI Catch-Up Summary Panel */}
+      <AnimatePresence>
+        {showSummary && (currentSummary || streamingSummary) && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="border-b border-border bg-primary/5 overflow-hidden"
+          >
+            <div className="p-4">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 text-primary" />
+                  <span className="text-sm font-medium text-primary">AI Catch-Up Summary</span>
+                </div>
+                <button
+                  onClick={() => { setShowSummary(false); dispatch(clearSummary(chat._id)); }}
+                  className="p-1 rounded hover:bg-muted/50"
+                >
+                  <X className="h-4 w-4 text-muted-foreground" />
+                </button>
+              </div>
+              <p className="text-sm text-foreground whitespace-pre-wrap">
+                {streamingSummary || currentSummary}
+                {streamingSummary && <span className="animate-pulse">|</span>}
+              </p>
             </div>
           </motion.div>
         )}
@@ -846,20 +912,33 @@ const ChatArea = ({ chat, onToggleInfo, onBack, isMobile = false }) => {
                       })()}
 
                       {/* Message bubble */}
-                      <div
-                        className={cn(
-                          "px-4 py-2.5 rounded-2xl",
-                          msg.isDeleted
-                            ? "bg-muted/50 italic"
-                            : isOwn
-                              ? "bg-primary text-primary-foreground rounded-br-md"
-                              : "bg-muted rounded-bl-md"
-                        )}
-                      >
-                        <p className="text-sm whitespace-pre-wrap">
-                          {msg.content}
-                        </p>
-                      </div>
+                      {(() => {
+                        const isAiMessage = msg.sender?.username === "AI Assistant";
+                        return (
+                          <div
+                            className={cn(
+                              "px-4 py-2.5 rounded-2xl",
+                              msg.isDeleted
+                                ? "bg-muted/50 italic"
+                                : isAiMessage
+                                  ? "bg-linear-to-r from-primary/10 to-primary/5 border border-primary/20 rounded-bl-md"
+                                  : isOwn
+                                    ? "bg-primary text-primary-foreground rounded-br-md"
+                                    : "bg-muted rounded-bl-md"
+                            )}
+                          >
+                            {isAiMessage && (
+                              <div className="flex items-center gap-1 mb-1">
+                                <Sparkles className="h-3 w-3 text-primary" />
+                                <span className="text-xs font-medium text-primary">AI Assistant</span>
+                              </div>
+                            )}
+                            <p className="text-sm whitespace-pre-wrap">
+                              {msg.content}
+                            </p>
+                          </div>
+                        );
+                      })()}
 
                       {/* Reactions display */}
                       {msg.reactions?.length > 0 && (
@@ -918,6 +997,28 @@ const ChatArea = ({ chat, onToggleInfo, onBack, isMobile = false }) => {
             </div>
           ))}
         </AnimatePresence>
+
+        {/* AI Typing Indicator */}
+        {isAiTyping && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex items-center gap-2 px-4"
+          >
+            <div className="px-4 py-3 rounded-2xl bg-linear-to-r from-primary/10 to-primary/5 rounded-bl-md">
+              <div className="flex items-center gap-2">
+                <Sparkles className="h-3.5 w-3.5 text-primary animate-pulse" />
+                <span className="text-xs text-primary">AI is thinking...</span>
+              </div>
+              {aiStreamText && (
+                <p className="text-sm text-foreground mt-1 whitespace-pre-wrap">
+                  {aiStreamText}
+                  <span className="animate-pulse">|</span>
+                </p>
+              )}
+            </div>
+          </motion.div>
+        )}
 
         {/* Typing Indicator */}
         {typingUsers.length > 0 && (
@@ -1102,6 +1203,11 @@ const ChatArea = ({ chat, onToggleInfo, onBack, isMobile = false }) => {
             <Paperclip className="h-5 w-5" />
           </button>
           <div className="flex-1 relative">
+            {message.toLowerCase().includes("@ai") && (
+              <div className="absolute -top-7 left-4 text-xs text-primary bg-primary/10 px-2 py-0.5 rounded inline-block">
+                AI will respond to your message
+              </div>
+            )}
             <input
               ref={inputRef}
               type="text"

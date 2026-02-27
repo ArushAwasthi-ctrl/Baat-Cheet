@@ -1,0 +1,218 @@
+import dotenv from "dotenv";
+import { Worker } from "bullmq";
+import Redis from "ioredis";
+import { streamText, generateText } from "ai";
+import { defaultModel } from "../config/ai.js";
+import Message from "../models/Messages.js";
+import { redisClient } from "../redis/redisClient.js";
+import { MESSAGE_PARTICIPANT_PROJECTION } from "../constants/projections.js";
+
+dotenv.config();
+
+// IO instance — set after socket initialization via setIO()
+let io = null;
+export const setIO = (ioInstance) => {
+  io = ioInstance;
+};
+
+const getRedisConnection = () => {
+  const redisUrl = process.env.REDIS_URL;
+  if (!redisUrl) return undefined;
+  return new Redis(redisUrl, {
+    maxRetriesPerRequest: null,
+    enableReadyCheck: false,
+  });
+};
+
+// ===================== HELPERS =====================
+
+function emitToUser(userId, event, data) {
+  if (io) {
+    io.to(`user:${userId}`).emit(event, data);
+  }
+}
+
+function emitToChat(chatId, event, data) {
+  if (io) {
+    io.to(`chat:${chatId}`).emit(event, data);
+  }
+}
+
+// ===================== SUMMARY JOB =====================
+
+async function handleSummaryJob(job) {
+  const { chatId, userId, messageIds, cacheKey } = job.data;
+
+  // Fetch unread messages
+  const messages = await Message.find({ _id: { $in: messageIds } })
+    .sort({ createdAt: 1 })
+    .populate("sender", "username")
+    .lean();
+
+  if (messages.length < 5) {
+    emitToUser(userId, "ai:summary:complete", {
+      chatId,
+      summary: "Only a few messages to catch up on. Read them directly!",
+      tooFew: true,
+    });
+    return;
+  }
+
+  // Build conversation text
+  const conversationText = messages
+    .map((m) => `${m.sender?.username || "Unknown"}: ${m.content || "[attachment]"}`)
+    .join("\n");
+
+  let fullText = "";
+
+  // Handle very long conversations (>100 messages) with hierarchical summarization
+  if (messages.length > 100) {
+    const lines = conversationText.split("\n");
+    const chunkSize = 50;
+    const chunkSummaries = [];
+
+    for (let i = 0; i < lines.length; i += chunkSize) {
+      const chunk = lines.slice(i, i + chunkSize).join("\n");
+      const { text } = await generateText({
+        model: defaultModel,
+        prompt: `Briefly summarize this chat excerpt in 2-3 sentences:\n${chunk}`,
+      });
+      chunkSummaries.push(text);
+    }
+
+    // Final summary of summaries — this one we stream
+    const combinedText = chunkSummaries.join("\n---\n");
+    fullText = await streamSummary(chatId, userId, combinedText);
+  } else {
+    fullText = await streamSummary(chatId, userId, conversationText);
+  }
+
+  // Cache the final summary in Redis
+  if (redisClient && cacheKey) {
+    const ttl = parseInt(process.env.AI_CACHE_TTL || "1800");
+    await redisClient.setex(cacheKey, ttl, fullText);
+  }
+
+  // Emit completion
+  emitToUser(userId, "ai:summary:complete", { chatId, summary: fullText });
+}
+
+async function streamSummary(chatId, userId, conversationText) {
+  const result = streamText({
+    model: defaultModel,
+    system:
+      "You are a helpful chat assistant. Summarize conversations concisely. Focus on: key topics discussed, decisions made, questions asked, and action items. Keep the summary brief (3-5 bullet points). Use plain text, no markdown headers.",
+    prompt: `Summarize this conversation:\n\n${conversationText}`,
+  });
+
+  let fullText = "";
+
+  for await (const chunk of result.textStream) {
+    fullText += chunk;
+    emitToUser(userId, "ai:summary:chunk", { chatId, chunk });
+  }
+
+  return fullText;
+}
+
+// ===================== AI CHAT JOB =====================
+
+async function handleAiChatJob(job) {
+  const { chatId, userId, userMessage, contextMessages, aiUserId } = job.data;
+
+  // Build context
+  const contextText = contextMessages
+    .map((m) => `${m.senderName}: ${m.content || "[attachment]"}`)
+    .join("\n");
+
+  // Start typing indicator
+  emitToChat(chatId, "ai:typing:start", { chatId });
+
+  const result = streamText({
+    model: defaultModel,
+    system: `You are a helpful AI assistant in a group chat called "Baat Cheet".
+You can see the recent conversation context below. A user has asked you a question by mentioning @ai.
+Be concise, helpful, and friendly. Keep responses under 200 words unless the question requires more detail.`,
+    messages: [
+      {
+        role: "user",
+        content: `Recent conversation context:\n${contextText}\n\nUser's message: ${userMessage}\n\nRespond naturally as a chat participant:`,
+      },
+    ],
+  });
+
+  let fullText = "";
+
+  for await (const chunk of result.textStream) {
+    fullText += chunk;
+    emitToChat(chatId, "ai:chat:chunk", { chatId, chunk, fullText });
+  }
+
+  // Stop typing
+  emitToChat(chatId, "ai:typing:stop", { chatId });
+
+  // Save AI response as a regular message
+  const aiMessage = await Message.create({
+    chat: chatId,
+    sender: aiUserId,
+    content: fullText.trim(),
+    type: "text",
+  });
+
+  const populatedMessage = await Message.findById(aiMessage._id)
+    .populate("sender", MESSAGE_PARTICIPANT_PROJECTION)
+    .lean();
+
+  // Emit as standard message:new (existing Redux handling picks it up)
+  emitToChat(chatId, "message:new", {
+    chatId,
+    message: populatedMessage,
+  });
+
+  emitToChat(chatId, "ai:chat:complete", {
+    chatId,
+    message: populatedMessage,
+  });
+
+  return { messageId: aiMessage._id };
+}
+
+// ===================== WORKER SETUP =====================
+
+const worker = new Worker(
+  "aiTasks",
+  async (job) => {
+    console.log(`Processing AI job: ${job.name} (${job.id})`);
+    switch (job.name) {
+      case "summary":
+        await handleSummaryJob(job);
+        break;
+      case "aiChat":
+        await handleAiChatJob(job);
+        break;
+      default:
+        console.warn(`Unknown AI job type: ${job.name}`);
+    }
+  },
+  {
+    connection: getRedisConnection(),
+    concurrency: 3,
+  },
+);
+
+worker.on("completed", (job) => {
+  console.log(`AI Job ${job.id} (${job.name}) completed`);
+});
+
+worker.on("failed", (job, err) => {
+  console.error(`AI Job ${job?.id} (${job?.name}) failed:`, err.message);
+  if (job?.data?.userId) {
+    const event = job.name === "summary" ? "ai:summary:error" : "ai:chat:error";
+    emitToUser(job.data.userId, event, {
+      chatId: job.data.chatId,
+      error: "AI service temporarily unavailable. Please try again.",
+    });
+  }
+});
+
+export default worker;

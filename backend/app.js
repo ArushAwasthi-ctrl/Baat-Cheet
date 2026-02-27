@@ -12,6 +12,7 @@ import UserRouter from "./routes/users-routes.js";
 import ChatRouter from "./routes/chats-routes.js";
 import MessageRouter from "./routes/messages-routes.js";
 import FriendRouter from "./routes/friends-routes.js";
+import AIRouter from "./routes/ai-routes.js";
 
 const app = express();
 
@@ -95,6 +96,7 @@ app.use("/api/users", UserRouter);
 app.use("/api/chats", ChatRouter);
 app.use("/api/messages", MessageRouter);
 app.use("/api/friends", FriendRouter);
+app.use("/api/ai", AIRouter);
 
 // 404 handler
 app.use((req, res, next) => {

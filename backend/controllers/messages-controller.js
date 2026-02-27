@@ -7,6 +7,8 @@ import asyncHandler from "../utils/asyncHandler.js";
 import { Types } from "mongoose";
 import { MESSAGE_PARTICIPANT_PROJECTION } from "../constants/projections.js";
 import { sanitize } from "../utils/sanitize.js";
+import aiQueue from "../queues/ai.queue.js";
+import { checkAiRateLimit } from "../utils/ai-rate-limiter.js";
 
 // Helper to emit socket events to a room
 const emitSocketEvent = (req, room, event, data) => {
@@ -30,6 +32,51 @@ const ensureChatParticipant = async (chatId, userId) => {
     throw new ApiError(403, "You are not a participant of this chat");
   }
   return chat;
+};
+
+// Check if message contains @ai mention and trigger AI response (fire-and-forget)
+const checkAndTriggerAiResponse = async (chatId, userId, content) => {
+  if (!content || !content.toLowerCase().includes("@ai")) return;
+
+  try {
+    await checkAiRateLimit(userId);
+
+    // Fetch last 20 messages for context
+    const contextMessages = await Message.find({
+      chat: chatId,
+      isDeleted: { $ne: true },
+    })
+      .sort({ createdAt: -1 })
+      .limit(20)
+      .populate("sender", "username")
+      .lean();
+
+    const contextForAI = contextMessages.reverse().map((m) => ({
+      senderName: m.sender?.username || "Unknown",
+      content: m.content || "[attachment]",
+    }));
+
+    // Extract the question (text after @ai)
+    const aiMentionIndex = content.toLowerCase().indexOf("@ai");
+    const userMessage = content.substring(aiMentionIndex + 3).trim() || content;
+
+    const aiUserId = process.env.AI_SYSTEM_USER_ID;
+    if (!aiUserId) {
+      console.warn("[AI] AI_SYSTEM_USER_ID not configured");
+      return;
+    }
+
+    await aiQueue.add("aiChat", {
+      chatId,
+      userId: userId.toString(),
+      userMessage,
+      contextMessages: contextForAI,
+      aiUserId,
+    });
+  } catch (err) {
+    // Rate limited or error — log but don't block the original message
+    console.warn("[AI] Failed to trigger AI response:", err.message);
+  }
 };
 
 //------------------------------------------------------------------------
@@ -138,6 +185,9 @@ const sendMessage = asyncHandler(async (req, res) => {
     chatId,
     lastMessage: populatedMessage,
   });
+
+  // Check for @ai mention and trigger AI response (fire-and-forget)
+  checkAndTriggerAiResponse(chatId, userId.toString(), content);
 
   return res
     .status(201)
