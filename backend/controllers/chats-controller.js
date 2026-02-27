@@ -53,12 +53,11 @@ const createOrGetDirectChat = asyncHandler(async (req, res) => {
   const result = await Chat.findOneAndUpdate(
     {
       type: "direct",
-      participants: { $all: sortedParticipants, $size: 2 },
+      participants: sortedParticipants,
     },
     {
       $setOnInsert: {
         type: "direct",
-        participants: sortedParticipants,
       },
     },
     { upsert: true, new: true, rawResult: true },
