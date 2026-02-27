@@ -60,7 +60,7 @@ const createOrGetDirectChat = asyncHandler(async (req, res) => {
         type: "direct",
       },
     },
-    { upsert: true, new: true, rawResult: true },
+    { upsert: true, new: true, includeResultMetadata: true },
   );
 
   const chatData = result.value;
