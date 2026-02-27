@@ -19,6 +19,7 @@ import {
   friendRequestAccepted,
   friendRemoved,
 } from "../store/slices/friendSlice";
+import { addToast } from "../store/slices/uiSlice";
 import {
   appendSummaryChunk,
   completeSummary,
@@ -255,6 +256,13 @@ class SocketService {
 
     this.socket.on("ai:summary:error", (data) => {
       store.dispatch(setSummaryError(data));
+      store.dispatch(
+        addToast({
+          type: "error",
+          title: "AI Error",
+          message: data.error || "Failed to generate summary.",
+        }),
+      );
     });
 
     // AI chat streaming
@@ -276,6 +284,13 @@ class SocketService {
 
     this.socket.on("ai:chat:error", (data) => {
       store.dispatch(setAiChatError(data));
+      store.dispatch(
+        addToast({
+          type: "error",
+          title: "AI Error",
+          message: data.error || "AI could not generate a response.",
+        }),
+      );
     });
   }
 

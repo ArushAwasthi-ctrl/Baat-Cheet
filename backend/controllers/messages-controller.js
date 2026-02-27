@@ -35,7 +35,7 @@ const ensureChatParticipant = async (chatId, userId) => {
 };
 
 // Check if message contains @ai mention and trigger AI response (fire-and-forget)
-const checkAndTriggerAiResponse = async (chatId, userId, content) => {
+const checkAndTriggerAiResponse = async (req, chatId, userId, content) => {
   if (!content || !content.toLowerCase().includes("@ai")) return;
 
   try {
@@ -74,8 +74,12 @@ const checkAndTriggerAiResponse = async (chatId, userId, content) => {
       aiUserId,
     });
   } catch (err) {
-    // Rate limited or error — log but don't block the original message
     console.warn("[AI] Failed to trigger AI response:", err.message);
+    // Emit error to chat so the frontend can show feedback
+    emitSocketEvent(req, `chat:${chatId}`, "ai:chat:error", {
+      chatId,
+      error: err.message,
+    });
   }
 };
 
@@ -187,7 +191,7 @@ const sendMessage = asyncHandler(async (req, res) => {
   });
 
   // Check for @ai mention and trigger AI response (fire-and-forget)
-  checkAndTriggerAiResponse(chatId, userId.toString(), content);
+  checkAndTriggerAiResponse(req, chatId, userId.toString(), content);
 
   return res
     .status(201)
