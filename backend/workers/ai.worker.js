@@ -107,9 +107,23 @@ async function streamSummary(chatId, userId, conversationText) {
 
   let fullText = "";
 
-  for await (const chunk of result.textStream) {
-    fullText += chunk;
-    emitToUser(userId, "ai:summary:chunk", { chatId, chunk });
+  try {
+    for await (const chunk of result.textStream) {
+      fullText += chunk;
+      emitToUser(userId, "ai:summary:chunk", { chatId, chunk });
+    }
+  } catch (streamErr) {
+    console.error("[AI Summary] Streaming error:", streamErr.message);
+  }
+
+  // Fallback: if streaming was empty, await full text
+  if (!fullText.trim()) {
+    console.warn("[AI Summary] Stream was empty, falling back to result.text");
+    try {
+      fullText = await result.text;
+    } catch (fallbackErr) {
+      console.error("[AI Summary] Fallback also failed:", fallbackErr.message);
+    }
   }
 
   return fullText;
@@ -124,6 +138,10 @@ async function handleAiChatJob(job) {
   const contextText = contextMessages
     .map((m) => `${m.senderName}: ${m.content || "[attachment]"}`)
     .join("\n");
+
+  console.log("[AI Chat] Starting job for chat:", chatId, "user:", userId);
+  console.log("[AI Chat] userMessage:", userMessage);
+  console.log("[AI Chat] context length:", contextMessages.length);
 
   // Start typing indicator
   emitToChat(chatId, "ai:typing:start", { chatId });
@@ -143,13 +161,40 @@ Be concise, helpful, and friendly. Keep responses under 200 words unless the que
 
   let fullText = "";
 
-  for await (const chunk of result.textStream) {
-    fullText += chunk;
-    emitToChat(chatId, "ai:chat:chunk", { chatId, chunk, fullText });
+  try {
+    for await (const chunk of result.textStream) {
+      fullText += chunk;
+      emitToChat(chatId, "ai:chat:chunk", { chatId, chunk, fullText });
+    }
+  } catch (streamErr) {
+    console.error("[AI Chat] Streaming error:", streamErr.message);
+  }
+
+  console.log("[AI Chat] Stream done. fullText length:", fullText.length);
+
+  // Fallback: if streaming produced empty text, await the full text Promise
+  if (!fullText.trim()) {
+    console.warn("[AI Chat] Stream was empty, falling back to result.text");
+    try {
+      fullText = await result.text;
+      console.log("[AI Chat] Fallback text length:", fullText.length);
+    } catch (fallbackErr) {
+      console.error("[AI Chat] Fallback also failed:", fallbackErr.message);
+    }
   }
 
   // Stop typing
   emitToChat(chatId, "ai:typing:stop", { chatId });
+
+  // Don't save empty AI messages
+  if (!fullText.trim()) {
+    console.error("[AI Chat] No text generated — skipping message save");
+    emitToChat(chatId, "ai:chat:error", {
+      chatId,
+      error: "AI could not generate a response. Please try again.",
+    });
+    return;
+  }
 
   // Save AI response as a regular message
   const aiMessage = await Message.create({
