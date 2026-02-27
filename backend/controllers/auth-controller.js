@@ -106,8 +106,15 @@ const verifyOtp = asyncHandler(async (req, res) => {
 
   const parsedUserData = JSON.parse(tempUserData);
 
-  // Match OTP (compare hashed values)
-  if (parsedUserData.otp !== hashOTP(otp)) throw new ApiError(400, "Invalid OTP");
+  // Match OTP using constant-time comparison to prevent timing attacks
+  const expectedHash = Buffer.from(parsedUserData.otp, "hex");
+  const receivedHash = Buffer.from(hashOTP(otp), "hex");
+  if (
+    expectedHash.length !== receivedHash.length ||
+    !crypto.timingSafeEqual(expectedHash, receivedHash)
+  ) {
+    throw new ApiError(400, "Invalid OTP");
+  }
 
   //  Ensure user doesn't already exist
   const existingUser = await User.findOne({ email });
@@ -365,8 +372,15 @@ const verifyForgotPasswordOtp = asyncHandler(async (req, res) => {
 
   const { otp: savedOtp } = JSON.parse(redisData);
 
-  // Compare hashed values
-  if (savedOtp !== hashOTP(otp)) throw new ApiError(400, "Invalid OTP");
+  // Compare hashed values using constant-time comparison to prevent timing attacks
+  const expectedResetHash = Buffer.from(savedOtp, "hex");
+  const receivedResetHash = Buffer.from(hashOTP(otp), "hex");
+  if (
+    expectedResetHash.length !== receivedResetHash.length ||
+    !crypto.timingSafeEqual(expectedResetHash, receivedResetHash)
+  ) {
+    throw new ApiError(400, "Invalid OTP");
+  }
 
   // Hash new password
   const hashedPassword = await bcrypt.hash(password, 10);

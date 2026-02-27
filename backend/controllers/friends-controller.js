@@ -1,6 +1,7 @@
 import { Types } from "mongoose";
 import FriendRequest from "../models/FriendRequest.js";
 import User from "../models/Users.js";
+import BlockedUser from "../models/BlockedUser.js";
 import ApiError from "../utils/api-error.js";
 import ApiResponse from "../utils/api-response.js";
 import asyncHandler from "../utils/asyncHandler.js";
@@ -29,6 +30,17 @@ const sendFriendRequest = asyncHandler(async (req, res) => {
   const targetUser = await User.findById(userId).lean();
   if (!targetUser) {
     throw new ApiError(404, "User not found");
+  }
+
+  // Check if either user has blocked the other
+  const isBlocked = await BlockedUser.findOne({
+    $or: [
+      { blocker: senderId, blocked: userId },
+      { blocker: userId, blocked: senderId },
+    ],
+  }).lean();
+  if (isBlocked) {
+    throw new ApiError(403, "Cannot send friend request — user is blocked");
   }
 
   // Check if already friends

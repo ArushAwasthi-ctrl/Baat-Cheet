@@ -131,11 +131,20 @@ const initializeSocket = (server) => {
       // Silently fail - user may have no chats yet
     }
 
-    // Broadcast online status to all user's contacts
-    socket.broadcast.emit("user:online", {
-      userId,
-      status: "online",
-    });
+    // Broadcast online status ONLY to user's friends (not all users — privacy)
+    try {
+      const currentUser = await User.findById(userId).select("friends").lean();
+      if (currentUser?.friends?.length > 0) {
+        currentUser.friends.forEach((friendId) => {
+          emitToUser(io, friendId.toString(), "user:online", {
+            userId,
+            status: "online",
+          });
+        });
+      }
+    } catch {
+      // Silently fail — don't block connection for status broadcast
+    }
 
     // ==================== EVENT HANDLERS ====================
 
@@ -278,11 +287,27 @@ const initializeSocket = (server) => {
               lastSeen: new Date(),
             });
 
-            // Broadcast offline status
-            socket.broadcast.emit("user:offline", {
-              userId,
-              status: "offline",
-              lastSeen: new Date(),
+            // Broadcast offline status ONLY to user's friends (not all users — privacy)
+            try {
+              const disconnectedUser = await User.findById(userId).select("friends").lean();
+              if (disconnectedUser?.friends?.length > 0) {
+                const lastSeen = new Date();
+                disconnectedUser.friends.forEach((friendId) => {
+                  emitToUser(io, friendId.toString(), "user:offline", {
+                    userId,
+                    status: "offline",
+                    lastSeen,
+                  });
+                });
+              }
+            } catch {
+              // Silently fail — don't block disconnect cleanup
+            }
+
+            // Clean up stuck typing indicators for this user in all rooms
+            const rooms = Array.from(socket.rooms).filter((r) => r.startsWith("chat:"));
+            rooms.forEach((room) => {
+              io.to(room).emit("typing:stop", { chatId: room.replace("chat:", ""), userId });
             });
           }
         }

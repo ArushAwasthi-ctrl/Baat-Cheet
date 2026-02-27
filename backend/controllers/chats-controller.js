@@ -43,29 +43,39 @@ const createOrGetDirectChat = asyncHandler(async (req, res) => {
   const userExists = await User.exists({ _id: userId });
   if (!userExists) throw new ApiError(404, "User not found");
 
-  // Check if chat already exists
-  const chatData = await Chat.findOne({
-    type: "direct",
-    participants: { $all: [currentId, userId], $size: 2 },
-  })
+  // Atomically find or create direct chat to prevent race conditions.
+  // Without upsert, two concurrent requests could both pass findOne (both get null)
+  // and both call create, resulting in duplicate direct chats.
+  const sortedParticipants = [currentId, userId].sort((a, b) =>
+    a.toString().localeCompare(b.toString()),
+  );
+
+  const result = await Chat.findOneAndUpdate(
+    {
+      type: "direct",
+      participants: { $all: sortedParticipants, $size: 2 },
+    },
+    {
+      $setOnInsert: {
+        type: "direct",
+        participants: sortedParticipants,
+      },
+    },
+    { upsert: true, new: true, rawResult: true },
+  );
+
+  const chatData = result.value;
+  const wasCreated = !result.lastErrorObject?.updatedExisting;
+
+  const populatedChat = await Chat.findById(chatData._id)
     .populate("participants", CHAT_PARTICIPANT_PROJECTION)
     .lean({ virtuals: true });
 
-  if (chatData) {
+  if (!wasCreated) {
     return res
       .status(200)
-      .json(new ApiResponse(200, { chat: chatData }, "Direct chat found successfully"));
+      .json(new ApiResponse(200, { chat: populatedChat }, "Direct chat found successfully"));
   }
-
-  // Create new direct chat
-  const newChat = await Chat.create({
-    type: "direct",
-    participants: [currentId, userId],
-  });
-
-  const populatedChat = await Chat.findById(newChat._id)
-    .populate("participants", CHAT_PARTICIPANT_PROJECTION)
-    .lean({ virtuals: true });
 
   // Emit socket event to the other user about new chat
   emitToUser(req, userId, "chat:new", { chat: populatedChat });

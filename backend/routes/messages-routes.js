@@ -24,6 +24,11 @@ import { messageUpload } from "../config/cloudinary.js";
 const MessageRouter = new Router();
 
 // POST /api/messages - Send a message (with optional file uploads)
+// NOTE: For multipart/form-data (file uploads), chatId is in the body which is parsed
+// by multer. This means files are uploaded to Cloudinary before chatId is validated.
+// Tradeoff accepted: files are stored but orphaned if chatId is invalid. A cleanup job
+// could remove orphaned Cloudinary files periodically. To fully fix, chatId would need
+// to move to a URL parameter: POST /api/messages/:chatId (breaking API change).
 MessageRouter.post(
   "/",
   authValidator,
