@@ -50,31 +50,28 @@ const createOrGetDirectChat = asyncHandler(async (req, res) => {
     a.toString().localeCompare(b.toString()),
   );
 
-  const result = await Chat.findOneAndUpdate(
-    {
-      type: "direct",
-      participants: sortedParticipants,
-    },
-    {
-      $setOnInsert: {
-        type: "direct",
-      },
-    },
-    { upsert: true, new: true, includeResultMetadata: true },
-  );
+  const existing = await Chat.findOne({
+    type: "direct",
+    participants: { $all: sortedParticipants, $size: 2 },
+  });
 
-  const chatData = result.value;
-  const wasCreated = !result.lastErrorObject?.updatedExisting;
-
-  const populatedChat = await Chat.findById(chatData._id)
-    .populate("participants", CHAT_PARTICIPANT_PROJECTION)
-    .lean({ virtuals: true });
-
-  if (!wasCreated) {
+  if (existing) {
+    const populatedChat = await Chat.findById(existing._id)
+      .populate("participants", CHAT_PARTICIPANT_PROJECTION)
+      .lean({ virtuals: true });
     return res
       .status(200)
       .json(new ApiResponse(200, { chat: populatedChat }, "Direct chat found successfully"));
   }
+
+  const newChat = await Chat.create({
+    type: "direct",
+    participants: sortedParticipants,
+  });
+
+  const populatedChat = await Chat.findById(newChat._id)
+    .populate("participants", CHAT_PARTICIPANT_PROJECTION)
+    .lean({ virtuals: true });
 
   // Emit socket event to the other user about new chat
   emitToUser(req, userId, "chat:new", { chat: populatedChat });
