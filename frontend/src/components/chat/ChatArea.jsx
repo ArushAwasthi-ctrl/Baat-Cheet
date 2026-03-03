@@ -608,10 +608,13 @@ const ChatArea = ({ chat, onToggleInfo, onBack, isMobile = false }) => {
           <button
             onClick={handleCatchUp}
             disabled={isRequestingSummary}
-            className="p-2 rounded-lg hover:bg-muted/50 transition-colors"
+            className="p-2 rounded-lg hover:bg-muted/50 transition-colors flex items-center gap-1"
             title="Catch up on unread messages"
           >
             <Sparkles className={cn("h-5 w-5", isRequestingSummary && "animate-pulse text-primary")} />
+            <span className="text-xs font-medium text-muted-foreground sm:hidden">
+              {isRequestingSummary ? "..." : "Catch Up"}
+            </span>
           </button>
           <button
             className="p-2 rounded-lg hover:bg-muted/50 transition-colors"

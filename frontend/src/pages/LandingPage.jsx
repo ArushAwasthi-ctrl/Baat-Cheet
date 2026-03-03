@@ -1,9 +1,7 @@
 // motion is used throughout the file in JSX
 // eslint-disable-next-line no-unused-vars
-import { motion } from "framer-motion";
+import { motion, useScroll, useSpring } from "framer-motion";
 import { Link } from "react-router";
-import { Swiper, SwiperSlide } from "swiper/react";
-import { Autoplay, Pagination } from "swiper/modules";
 import {
   MessageCircle,
   Users,
@@ -17,20 +15,20 @@ import {
   Mail,
   Menu,
   X,
-  Star,
-  Quote,
   Twitter,
   Linkedin,
   Heart,
+  Code2,
+  Database,
+  Cpu,
+  Radio,
+  Palette,
+  Bot,
 } from "lucide-react";
 import { useState } from "react";
 import Logo from "@/components/shared/Logo";
 import ThemeToggle from "@/components/shared/ThemeToggle";
 import { Button } from "@/components/ui/Button";
-
-// Import Swiper styles
-import "swiper/css";
-import "swiper/css/pagination";
 
 // Features data
 const features = [
@@ -91,61 +89,59 @@ const steps = [
   },
 ];
 
-// Testimonials data with DiceBear avatar URLs
-const testimonials = [
+// Tech Stack data
+const techStack = [
   {
-    name: "Sarah Johnson",
-    role: "Product Designer",
-    company: "DesignCo",
-    content: "Baat Cheet has transformed how our design team collaborates. The real-time messaging is incredibly smooth and the interface is beautiful.",
-    rating: 5,
-    avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Sarah&backgroundColor=b6e3f4",
+    icon: Code2,
+    name: "React 19",
+    description: "Latest React with concurrent features and Vite for lightning-fast HMR.",
+    color: "from-cyan-500 to-blue-500",
   },
   {
-    name: "Michael Chen",
-    role: "Software Engineer",
-    company: "TechStart",
-    content: "Finally, a chat app that respects privacy while delivering a fantastic user experience. The group chat features are exactly what we needed.",
-    rating: 5,
-    avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Michael&backgroundColor=c0aede",
+    icon: Radio,
+    name: "Socket.IO",
+    description: "Real-time bidirectional communication for instant message delivery.",
+    color: "from-green-500 to-emerald-500",
   },
   {
-    name: "Emily Rodriguez",
-    role: "Startup Founder",
-    company: "InnovateLab",
-    content: "We switched our entire team to Baat Cheet. The speed and reliability are unmatched. Highly recommend for any growing team!",
-    rating: 5,
-    avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Emily&backgroundColor=ffd5dc",
+    icon: Database,
+    name: "MongoDB + Redis",
+    description: "Document database with Redis caching for sub-millisecond performance.",
+    color: "from-orange-500 to-amber-500",
   },
   {
-    name: "David Kim",
-    role: "Marketing Manager",
-    company: "GrowthHub",
-    content: "The clean design and intuitive interface made onboarding our team effortless. Love the dark mode too!",
-    rating: 5,
-    avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=David&backgroundColor=d1f4d1",
+    icon: Bot,
+    name: "AI Powered",
+    description: "Groq Llama 3.1 for chat summaries and in-chat AI assistant.",
+    color: "from-violet-500 to-purple-500",
   },
   {
-    name: "Priya Sharma",
-    role: "Freelance Writer",
-    company: "Self-employed",
-    content: "I use Baat Cheet to stay connected with clients worldwide. The cross-platform support is seamless and reliable.",
-    rating: 5,
-    avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Priya&backgroundColor=ffdfba",
+    icon: Palette,
+    name: "Tailwind CSS v4",
+    description: "Utility-first CSS with dark/light theming via CSS custom properties.",
+    color: "from-pink-500 to-rose-500",
+  },
+  {
+    icon: Cpu,
+    name: "BullMQ Workers",
+    description: "Background job processing for AI tasks and email delivery.",
+    color: "from-indigo-500 to-blue-500",
   },
 ];
 
-// Animation variants
+// Enhanced animation variants
 const fadeInUp = {
-  initial: { opacity: 0, y: 20 },
+  initial: { opacity: 0, y: 30 },
   animate: { opacity: 1, y: 0 },
-  transition: { duration: 0.5 },
+  transition: { duration: 0.6, ease: [0.25, 0.46, 0.45, 0.94] },
 };
 
 const staggerContainer = {
+  initial: {},
   animate: {
     transition: {
-      staggerChildren: 0.1,
+      staggerChildren: 0.12,
+      delayChildren: 0.1,
     },
   },
 };
@@ -153,6 +149,8 @@ const staggerContainer = {
 // Header Component
 const Header = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { scrollYProgress } = useScroll();
+  const scaleX = useSpring(scrollYProgress, { stiffness: 100, damping: 30 });
 
   return (
     <motion.header
@@ -161,6 +159,11 @@ const Header = () => {
       transition={{ type: "spring", stiffness: 100, damping: 20 }}
       className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/80 backdrop-blur-xl"
     >
+      {/* Scroll Progress Bar */}
+      <motion.div
+        className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-violet-500 to-purple-500 origin-left"
+        style={{ scaleX }}
+      />
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
         <Logo />
 
@@ -179,10 +182,10 @@ const Header = () => {
             How It Works
           </a>
           <a
-            href="#testimonials"
+            href="#tech-stack"
             className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
           >
-            Testimonials
+            Tech Stack
           </a>
           <ThemeToggle />
           <Link to="/login">
@@ -231,11 +234,11 @@ const Header = () => {
               How It Works
             </a>
             <a
-              href="#testimonials"
+              href="#tech-stack"
               className="text-sm font-medium text-muted-foreground hover:text-foreground"
               onClick={() => setMobileMenuOpen(false)}
             >
-              Testimonials
+              Tech Stack
             </a>
             <Link to="/login" onClick={() => setMobileMenuOpen(false)}>
               <Button variant="ghost" className="w-full justify-start">
@@ -485,26 +488,50 @@ const Hero = () => {
           Now with real-time messaging
         </motion.div>
 
-        {/* Main Headline */}
-        <motion.h1
-          className="text-4xl font-black leading-tight tracking-tight sm:text-6xl lg:text-7xl"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-        >
-          <span className="block text-foreground">Where</span>
-          <span className="block bg-gradient-to-r from-violet-500 via-purple-500 to-pink-500 bg-clip-text text-transparent">
-            Conversations
+        {/* Main Headline with character reveal */}
+        <h1 className="text-4xl font-black leading-tight tracking-tight sm:text-6xl lg:text-7xl">
+          <span className="block text-foreground">
+            {"Where".split("").map((char, i) => (
+              <motion.span
+                key={i}
+                className="inline-block"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 + i * 0.05, duration: 0.4 }}
+              >
+                {char}
+              </motion.span>
+            ))}
           </span>
-          <span className="block text-foreground">Come Alive</span>
-        </motion.h1>
+          <motion.span
+            className="block bg-gradient-to-r from-violet-500 via-purple-500 to-pink-500 bg-clip-text text-transparent"
+            initial={{ opacity: 0, filter: "blur(10px)" }}
+            animate={{ opacity: 1, filter: "blur(0px)" }}
+            transition={{ delay: 0.5, duration: 0.8 }}
+          >
+            Conversations
+          </motion.span>
+          <span className="block text-foreground">
+            {"Come Alive".split("").map((char, i) => (
+              <motion.span
+                key={i}
+                className="inline-block"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.9 + i * 0.04, duration: 0.4 }}
+              >
+                {char === " " ? "\u00A0" : char}
+              </motion.span>
+            ))}
+          </span>
+        </h1>
 
-        {/* Subtitle */}
+        {/* Subtitle with blur fade-in */}
         <motion.p
           className="mx-auto max-w-2xl text-lg text-muted-foreground sm:text-xl"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.4 }}
+          initial={{ opacity: 0, filter: "blur(8px)", y: 15 }}
+          animate={{ opacity: 1, filter: "blur(0px)", y: 0 }}
+          transition={{ delay: 0.6, duration: 0.7 }}
         >
           Connect with friends, family, and teams through{" "}
           <span className="font-semibold text-foreground">instant messaging</span>.
@@ -607,16 +634,27 @@ const Features = () => {
           {features.map((feature, index) => (
             <motion.div
               key={index}
-              className="group relative rounded-2xl border border-border bg-card/50 backdrop-blur-sm p-6 transition-all duration-300 hover:border-primary/50 hover:shadow-lg hover:shadow-primary/5"
+              className="group relative rounded-2xl border border-border bg-card/50 backdrop-blur-sm p-6 transition-all duration-300 hover:border-primary/50 hover:shadow-xl hover:shadow-primary/10 overflow-hidden"
               variants={fadeInUp}
+              whileHover={{
+                y: -8,
+                transition: { type: "spring", stiffness: 300, damping: 20 },
+              }}
             >
-              <div className="mb-4 inline-flex rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 p-3 text-primary">
+              {/* Gradient glow on hover */}
+              <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+
+              <motion.div
+                className="relative mb-4 inline-flex rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 p-3 text-primary"
+                whileHover={{ rotate: [0, -10, 10, 0], scale: 1.1 }}
+                transition={{ duration: 0.4 }}
+              >
                 <feature.icon className="h-6 w-6" />
-              </div>
-              <h3 className="mb-2 text-lg font-semibold text-foreground">
+              </motion.div>
+              <h3 className="relative mb-2 text-lg font-semibold text-foreground">
                 {feature.title}
               </h3>
-              <p className="text-sm text-muted-foreground">{feature.description}</p>
+              <p className="relative text-sm text-muted-foreground">{feature.description}</p>
             </motion.div>
           ))}
         </motion.div>
@@ -658,14 +696,32 @@ const HowItWorks = () => {
               viewport={{ once: true }}
               transition={{ delay: index * 0.2 }}
             >
-              {/* Step Number with gradient */}
-              <div className="mb-6 inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-primary/50 text-xl font-bold text-primary-foreground shadow-lg shadow-primary/25">
+              {/* Step Number with animated entrance */}
+              <motion.div
+                className="mb-6 inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-primary/50 text-xl font-bold text-primary-foreground shadow-lg shadow-primary/25"
+                initial={{ scale: 0, rotate: -180 }}
+                whileInView={{ scale: 1, rotate: 0 }}
+                viewport={{ once: true }}
+                transition={{
+                  type: "spring",
+                  stiffness: 200,
+                  damping: 15,
+                  delay: index * 0.2,
+                }}
+              >
                 {item.step}
-              </div>
+              </motion.div>
 
-              {/* Connector Line */}
+              {/* Animated Connector Line */}
               {index < steps.length - 1 && (
-                <div className="hidden md:block absolute top-8 left-[60%] w-[80%] h-0.5 bg-gradient-to-r from-primary/50 to-transparent" />
+                <motion.div
+                  className="hidden md:block absolute top-8 left-[60%] w-[80%] h-0.5 bg-gradient-to-r from-primary/50 to-transparent"
+                  initial={{ scaleX: 0 }}
+                  whileInView={{ scaleX: 1 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: 0.3 + index * 0.2, duration: 0.6 }}
+                  style={{ transformOrigin: "left" }}
+                />
               )}
 
               <h3 className="mb-2 text-xl font-semibold text-foreground">{item.title}</h3>
@@ -678,10 +734,10 @@ const HowItWorks = () => {
   );
 };
 
-// Testimonials Section with Swiper and Avatar Images
-const Testimonials = () => {
+// Tech Stack Showcase Section
+const TechStackShowcase = () => {
   return (
-    <section id="testimonials" className="relative py-24 px-4 overflow-hidden">
+    <section id="tech-stack" className="relative py-24 px-4 overflow-hidden">
       {/* Background gradient */}
       <div className="absolute inset-0 -z-10">
         <div className="absolute top-0 right-1/4 w-[500px] h-[500px] bg-gradient-to-r from-violet-500/10 to-purple-500/10 rounded-full blur-3xl" />
@@ -697,76 +753,38 @@ const Testimonials = () => {
           transition={{ duration: 0.5 }}
         >
           <h2 className="text-3xl font-bold tracking-tight sm:text-4xl lg:text-5xl mb-4">
-            Loved by{" "}
-            <span className="bg-gradient-to-r from-pink-500 to-rose-500 bg-clip-text text-transparent">
-              teams worldwide
+            Powered by{" "}
+            <span className="bg-gradient-to-r from-violet-500 to-purple-500 bg-clip-text text-transparent">
+              modern tech
             </span>
           </h2>
           <p className="mx-auto max-w-2xl text-lg text-muted-foreground">
-            See what our users are saying about their experience with Baat Cheet.
+            Built with cutting-edge tools for performance, scalability, and developer experience.
           </p>
         </motion.div>
 
-        <Swiper
-          modules={[Autoplay, Pagination]}
-          grabCursor={true}
-          autoplay={{
-            delay: 4000,
-            disableOnInteraction: false,
-          }}
-          pagination={{
-            clickable: true,
-            dynamicBullets: true,
-          }}
-          breakpoints={{
-            320: { slidesPerView: 1, spaceBetween: 20 },
-            640: { slidesPerView: 2, spaceBetween: 24 },
-            1024: { slidesPerView: 3, spaceBetween: 32 },
-          }}
-          className="testimonials-swiper pb-14"
-        >
-          {testimonials.map((testimonial, index) => (
-            <SwiperSlide key={index}>
-              <motion.div
-                className="relative rounded-2xl border border-border bg-card/80 backdrop-blur-sm p-6 h-full flex flex-col"
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: index * 0.1 }}
-              >
-                <Quote className="absolute top-4 right-4 h-8 w-8 text-primary/10" />
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {techStack.map((tech, index) => (
+            <motion.div
+              key={index}
+              className="group relative rounded-2xl border border-border bg-card/50 backdrop-blur-sm p-6 transition-all duration-300 hover:border-primary/50 hover:shadow-lg hover:shadow-primary/5 overflow-hidden"
+              initial={{ opacity: 0, y: 30, scale: 0.95 }}
+              whileInView={{ opacity: 1, y: 0, scale: 1 }}
+              viewport={{ once: true }}
+              transition={{ delay: index * 0.1, duration: 0.5 }}
+              whileHover={{ y: -4 }}
+            >
+              {/* Animated gradient border on hover */}
+              <div className={`absolute inset-0 bg-gradient-to-r ${tech.color} opacity-0 group-hover:opacity-5 transition-opacity duration-500 rounded-2xl`} />
 
-                {/* Rating */}
-                <div className="flex gap-1 mb-4">
-                  {[...Array(testimonial.rating)].map((_, i) => (
-                    <Star key={i} className="h-4 w-4 fill-yellow-500 text-yellow-500" />
-                  ))}
-                </div>
-
-                {/* Content */}
-                <p className="text-muted-foreground mb-6 leading-relaxed flex-1">
-                  "{testimonial.content}"
-                </p>
-
-                {/* Author with Avatar */}
-                <div className="flex items-center gap-3 pt-4 border-t border-border">
-                  <img
-                    src={testimonial.avatar}
-                    alt={testimonial.name}
-                    className="w-12 h-12 rounded-full bg-muted"
-                    loading="lazy"
-                  />
-                  <div>
-                    <p className="font-semibold text-foreground">{testimonial.name}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {testimonial.role} at {testimonial.company}
-                    </p>
-                  </div>
-                </div>
-              </motion.div>
-            </SwiperSlide>
+              <div className={`mb-4 inline-flex rounded-xl bg-gradient-to-br ${tech.color} p-3 text-white shadow-lg`}>
+                <tech.icon className="h-6 w-6" />
+              </div>
+              <h3 className="mb-2 text-lg font-semibold text-foreground">{tech.name}</h3>
+              <p className="text-sm text-muted-foreground">{tech.description}</p>
+            </motion.div>
           ))}
-        </Swiper>
+        </div>
       </div>
     </section>
   );
@@ -778,7 +796,14 @@ const CTA = () => {
     <section className="relative py-24 px-4 overflow-hidden">
       {/* Background */}
       <div className="absolute inset-0 -z-10">
-        <div className="absolute inset-0 bg-gradient-to-r from-violet-500/10 via-purple-500/10 to-pink-500/10" />
+        <motion.div
+          className="absolute inset-0 bg-gradient-to-r from-violet-500/10 via-purple-500/10 to-pink-500/10"
+          animate={{
+            backgroundPosition: ["0% 50%", "100% 50%", "0% 50%"],
+          }}
+          transition={{ duration: 8, repeat: Infinity, ease: "linear" }}
+          style={{ backgroundSize: "200% 200%" }}
+        />
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[400px] bg-gradient-to-r from-primary/20 to-primary/5 rounded-full blur-3xl" />
       </div>
 
@@ -797,8 +822,8 @@ const CTA = () => {
           ?
         </h2>
         <p className="mx-auto max-w-2xl text-lg text-muted-foreground mb-8">
-          Join thousands of users who are already enjoying seamless communication with Baat
-          Cheet. Sign up today and experience the difference.
+          Experience seamless, real-time communication powered by modern tech and AI.
+          Sign up today — it's free forever.
         </p>
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
           <Link to="/signup">
@@ -824,7 +849,7 @@ const Footer = () => {
     product: [
       { name: "Features", href: "#features" },
       { name: "How It Works", href: "#how-it-works" },
-      { name: "Testimonials", href: "#testimonials" },
+      { name: "Tech Stack", href: "#tech-stack" },
       { name: "Pricing", href: "#" },
     ],
     company: [
@@ -959,7 +984,7 @@ const LandingPage = () => {
         <Hero />
         <Features />
         <HowItWorks />
-        <Testimonials />
+        <TechStackShowcase />
         <CTA />
       </main>
       <Footer />

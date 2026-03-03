@@ -163,31 +163,21 @@ const AuthLayout = ({ children, title, subtitle, isSignup = false }) => {
             Join the network for people who value clarity, speed, and meaningful connections.
           </motion.p>
 
-          {/* Social Proof */}
+          {/* Tech Stack Badges */}
           <motion.div
-            className="flex items-center gap-4 mt-8"
+            className="flex flex-wrap items-center gap-3 mt-8"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.4 }}
           >
-            <div className="flex -space-x-3">
-              {[
-                "https://api.dicebear.com/7.x/avataaars/svg?seed=John&backgroundColor=e5e5e5",
-                "https://api.dicebear.com/7.x/avataaars/svg?seed=Emma&backgroundColor=d4d4d4",
-                "https://api.dicebear.com/7.x/avataaars/svg?seed=Alex&backgroundColor=f5f5f5",
-              ].map((avatar, i) => (
-                <img
-                  key={i}
-                  src={avatar}
-                  alt="User"
-                  className="w-10 h-10 rounded-full border-2 border-zinc-800 bg-zinc-700"
-                />
-              ))}
-            </div>
-            <div className="text-white">
-              <p className="font-semibold">1k+ Users</p>
-              <p className="text-sm text-zinc-500">Joined this week</p>
-            </div>
+            {["React 19", "Socket.IO", "AI Powered"].map((tech, i) => (
+              <span
+                key={i}
+                className="px-3 py-1.5 rounded-full text-xs font-medium border border-white/10 bg-white/5 text-zinc-300"
+              >
+                {tech}
+              </span>
+            ))}
           </motion.div>
         </div>
 
