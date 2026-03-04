@@ -41,10 +41,12 @@ const checkAndTriggerAiResponse = async (req, chatId, userId, content) => {
   try {
     await checkAiRateLimit(userId);
 
-    // Fetch last 20 messages for context
+    // Fetch last 20 messages for context (exclude AI's own messages to prevent echo loops)
+    const aiUserId = process.env.AI_SYSTEM_USER_ID;
     const contextMessages = await Message.find({
       chat: chatId,
       isDeleted: { $ne: true },
+      ...(aiUserId && { sender: { $ne: aiUserId } }),
     })
       .sort({ createdAt: -1 })
       .limit(20)
@@ -56,11 +58,9 @@ const checkAndTriggerAiResponse = async (req, chatId, userId, content) => {
       content: m.content || "[attachment]",
     }));
 
-    // Extract the question (text after @ai)
-    const aiMentionIndex = content.toLowerCase().indexOf("@ai");
-    const userMessage = content.substring(aiMentionIndex + 3).trim() || content;
+    // Strip all @ai mentions and extract the actual question
+    const userMessage = content.replace(/@ai/gi, "").trim() || "What can you help me with?";
 
-    const aiUserId = process.env.AI_SYSTEM_USER_ID;
     if (!aiUserId) {
       console.warn("[AI] AI_SYSTEM_USER_ID not configured");
       return;

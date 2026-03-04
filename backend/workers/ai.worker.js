@@ -75,7 +75,8 @@ async function handleSummaryJob(job) {
       const chunk = lines.slice(i, i + chunkSize).join("\n");
       const { text } = await generateText({
         model: defaultModel,
-        prompt: `Briefly summarize this chat excerpt in 2-3 sentences:\n${chunk}`,
+        system: "You are a chat summarizer. Be concise and factual. Use plain text only.",
+        prompt: `Summarize this chat excerpt in 2-3 sentences. Focus on what was discussed and any decisions or questions:\n\n${chunk}`,
       });
       chunkSummaries.push(text);
     }
@@ -100,8 +101,15 @@ async function handleSummaryJob(job) {
 async function streamSummary(chatId, userId, conversationText) {
   const result = streamText({
     model: defaultModel,
-    system:
-      "You are a helpful chat assistant. Summarize conversations concisely. Focus on: key topics discussed, decisions made, questions asked, and action items. Keep the summary brief (3-5 bullet points). Use plain text, no markdown headers.",
+    system: `You are a chat summarizer for the app "Baat Cheet".
+Summarize the conversation concisely so the user can catch up quickly.
+
+Rules:
+- Use 3-5 bullet points
+- Focus on: key topics discussed, decisions made, questions asked, and action items
+- Use plain text, no markdown headers
+- Be factual — do not add information that isn't in the conversation
+- If the conversation is casual with no key points, say so briefly`,
     prompt: `Summarize this conversation:\n\n${conversationText}`,
   });
 
@@ -148,13 +156,22 @@ async function handleAiChatJob(job) {
 
   const result = streamText({
     model: defaultModel,
-    system: `You are a helpful AI assistant in a group chat called "Baat Cheet".
-You can see the recent conversation context below. A user has asked you a question by mentioning @ai.
-Be concise, helpful, and friendly. Keep responses under 200 words unless the question requires more detail.`,
+    system: `You are a helpful AI assistant embedded in a chat app called "Baat Cheet".
+Users mention @ai to ask you questions.
+
+Rules:
+- Answer the user's question directly and accurately
+- Use the conversation context only if it helps answer the question
+- Do not repeat or summarize the conversation unless asked
+- Do not roleplay as other users or pretend to be a chat participant
+- Keep responses concise (under 150 words) unless more detail is needed
+- Use plain text. Avoid markdown headers. Light formatting (bullet points, bold) is okay
+- If the question is unclear, ask for clarification instead of guessing
+- Do not make up information. Say "I'm not sure" if you don't know`,
     messages: [
       {
         role: "user",
-        content: `Recent conversation context:\n${contextText}\n\nUser's message: ${userMessage}\n\nRespond naturally as a chat participant:`,
+        content: `Here is the recent chat conversation for context:\n\n${contextText}\n\n---\n\nThe user's question is: ${userMessage}`,
       },
     ],
   });
