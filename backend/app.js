@@ -74,13 +74,8 @@ app.use(helmet());
 app.use(compression());
 app.use(morgan(process.env.NODE_ENV === "production" ? "combined" : "dev"));
 
-// Apply rate limiting in production
-if (process.env.NODE_ENV === "production") {
-  app.use("/api/", apiLimiter);
-  app.use("/api/auth/", authLimiter);
-}
-
 // Health check endpoint (for load balancers and monitoring)
+// Defined BEFORE rate limiter so health checks are never rate limited.
 app.get("/api/health", (req, res) => {
   res.status(200).json({
     status: "healthy",
@@ -89,6 +84,12 @@ app.get("/api/health", (req, res) => {
     environment: process.env.NODE_ENV || "development",
   });
 });
+
+// Apply rate limiting in production
+if (process.env.NODE_ENV === "production") {
+  app.use("/api/", apiLimiter);
+  app.use("/api/auth/", authLimiter);
+}
 
 // Routes
 app.use("/api/auth", Authrouter);
