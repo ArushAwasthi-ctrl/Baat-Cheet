@@ -1,5 +1,7 @@
 {
   "compilerOptions": {
+    // Silence baseUrl deprecation warning until TS 7
+    "ignoreDeprecations": "6.0",
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"]
